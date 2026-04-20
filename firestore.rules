@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return signedIn() && myUser().data.role == 'admin';
+    }
+
+    function isChauffeur() {
+      return signedIn() && myUser().data.role == 'chauffeur';
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow write: if isAdmin() || (signedIn() && request.auth.uid == userId);
+    }
+
+    match /camions/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /chauffeurs/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /voyages/{docId} {
+      allow read: if isAdmin() || (isChauffeur() && resource.data.createdBy == request.auth.uid);
+      allow create: if isAdmin() || isChauffeur();
+      allow update, delete: if isAdmin() || (isChauffeur() && resource.data.createdBy == request.auth.uid);
+    }
+
+    match /entretiens/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /depenses/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

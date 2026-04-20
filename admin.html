@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fr" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - Gestion Camion Pro</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="brand-block">
+        <div class="brand-badge">GC</div>
+        <div>
+          <h2>Gestion Camion Pro</h2>
+          <small class="muted">Admin</small>
+        </div>
+      </div>
+      <nav class="side-nav">
+        <a href="#dashboard" class="active">Dashboard</a>
+        <a href="#camions">Camions</a>
+        <a href="#chauffeurs">Chauffeurs</a>
+        <a href="#voyages">Voyages</a>
+        <a href="#entretiens">Entretien</a>
+        <a href="#depenses">Dépenses</a>
+      </nav>
+      <div class="sidebar-actions">
+        <button id="installBtn" class="btn secondary hidden">Installer l'application</button>
+        <button id="logoutBtn" class="btn danger">Déconnexion</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header card">
+        <div>
+          <h1>Tableau de bord admin</h1>
+          <p class="muted">Gérez les camions, chauffeurs, voyages, entretiens et dépenses.</p>
+        </div>
+        <div class="header-actions">
+          <input id="globalSearch" class="search" placeholder="Recherche rapide..." />
+        </div>
+      </header>
+
+      <section class="stats-grid">
+        <div class="stat-card card"><span>Camions</span><strong id="statCamions">0</strong></div>
+        <div class="stat-card card"><span>Chauffeurs</span><strong id="statChauffeurs">0</strong></div>
+        <div class="stat-card card"><span>Voyages</span><strong id="statVoyages">0</strong></div>
+        <div class="stat-card card"><span>Dépenses</span><strong id="statDepenses">0</strong></div>
+      </section>
+
+      <section id="dashboard" class="two-cols">
+        <div class="card">
+          <div class="card-head"><h3>Actions rapides</h3></div>
+          <div class="quick-actions">
+            <button class="btn primary" data-open-modal="camionModal">Ajouter camion</button>
+            <button class="btn primary" data-open-modal="chauffeurModal">Ajouter chauffeur</button>
+            <button class="btn primary" data-open-modal="voyageModal">Ajouter voyage</button>
+            <button class="btn primary" data-open-modal="depenseModal">Ajouter dépense</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Résumé</h3></div>
+          <ul class="summary-list">
+            <li>Total revenus voyages: <strong id="totalRevenus">0 $</strong></li>
+            <li>Total dépenses: <strong id="totalDepenses">0 $</strong></li>
+            <li>Total gasoil: <strong id="totalGasoil">0 $</strong></li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="camions" class="card">
+        <div class="card-head"><h3>Camions</h3><button class="btn primary" data-open-modal="camionModal">Nouveau</button></div>
+        <div class="table-wrap"><table><thead><tr><th>N°</th><th>Plaque</th><th>Marque / modèle</th><th>Remorque</th><th>Actions</th></tr></thead><tbody id="camionsTable"></tbody></table></div>
+      </section>
+
+      <section id="chauffeurs" class="card">
+        <div class="card-head"><h3>Chauffeurs</h3><button class="btn primary" data-open-modal="chauffeurModal">Nouveau</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Nom</th><th>N° chauffeur</th><th>Permis</th><th>Adresse</th><th>Actions</th></tr></thead><tbody id="chauffeursTable"></tbody></table></div>
+      </section>
+
+      <section id="voyages" class="card">
+        <div class="card-head"><h3>Voyages</h3><button class="btn primary" data-open-modal="voyageModal">Nouveau</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Client</th><th>Destination</th><th>Départ</th><th>Arrivée</th><th>Prix</th><th>Gasoil</th><th>Chauffeur</th><th>Actions</th></tr></thead><tbody id="voyagesTable"></tbody></table></div>
+      </section>
+
+      <section id="entretiens" class="card">
+        <div class="card-head"><h3>Entretien</h3><button class="btn primary" data-open-modal="entretienModal">Nouveau</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Type</th><th>Camion</th><th>Montant</th><th>Date</th><th>Notes</th><th>Actions</th></tr></thead><tbody id="entretiensTable"></tbody></table></div>
+      </section>
+
+      <section id="depenses" class="card">
+        <div class="card-head"><h3>Autres dépenses</h3><button class="btn primary" data-open-modal="depenseModal">Nouveau</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Catégorie</th><th>Montant</th><th>Auteur</th><th>Date</th><th>Actions</th></tr></thead><tbody id="depensesTable"></tbody></table></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modalRoot"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/modals.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
