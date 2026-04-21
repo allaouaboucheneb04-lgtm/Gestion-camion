@@ -1,20 +1,66 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    function signedIn() { return request.auth != null; }
-    function userDoc() { return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)); }
-    function userExists() { return signedIn() && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)); }
-    function myRole() { return userExists() ? userDoc().data.role : null; }
-    function isAdmin() { return signedIn() && myRole() == 'admin'; }
-    function isDriver() { return signedIn() && myRole() == 'chauffeur'; }
 
-    match /voyages/{voyageId}/{allPaths=**} {
-      allow read: if isAdmin() || (isDriver() && firestore.get(/databases/(default)/documents/voyages/$(voyageId)).data.chauffeurId == request.auth.uid);
-      allow write: if isAdmin() || (isDriver() && firestore.exists(/databases/(default)/documents/voyages/$(voyageId)) && firestore.get(/databases/(default)/documents/voyages/$(voyageId)).data.chauffeurId == request.auth.uid);
+    function signedIn() {
+      return request.auth != null;
     }
-    match /entretien/{id}/{allPaths=**} { allow read: if signedIn(); allow write: if isAdmin(); }
-    match /depenses/{id}/{allPaths=**} { allow read: if signedIn(); allow write: if isAdmin(); }
-    match /chauffeurs/{uid}/{allPaths=**} { allow read: if isAdmin() || (signedIn() && request.auth.uid == uid); allow write: if isAdmin() || (signedIn() && request.auth.uid == uid); }
-    match /{allPaths=**} { allow read, write: if false; }
+
+    function userDoc() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function userExists() {
+      return signedIn() &&
+        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function myRole() {
+      return userExists() ? userDoc().data.role : null;
+    }
+
+    function isAdmin() {
+      return signedIn() && myRole() == "admin";
+    }
+
+    function isDriver() {
+      return signedIn() && myRole() == "chauffeur";
+    }
+
+    match /camions/{camionId}/{allPaths=**} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /entretien/{entretienId}/{allPaths=**} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /depenses/{depenseId}/{allPaths=**} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /voyages/{voyageId}/{fileName} {
+      allow read: if isAdmin() ||
+        (isDriver() &&
+         firestore.exists(/databases/(default)/documents/voyages/$(voyageId)) &&
+         firestore.get(/databases/(default)/documents/voyages/$(voyageId)).data.chauffeurId == request.auth.uid);
+
+      allow write: if isAdmin() ||
+        (isDriver() &&
+         firestore.exists(/databases/(default)/documents/voyages/$(voyageId)) &&
+         firestore.get(/databases/(default)/documents/voyages/$(voyageId)).data.chauffeurId == request.auth.uid);
+    }
+
+    match /chauffeurs/{uid}/{allPaths=**} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow write: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
   }
 }

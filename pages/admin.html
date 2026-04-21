@@ -3,48 +3,57 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin | Gestion Camion Pro</title>
+  <title>Admin - Gestion Camion Pro Ultra</title>
   <link rel="stylesheet" href="../css/style.css" />
 </head>
 <body>
-  <div class="layout">
+  <div class="app-shell">
     <aside class="sidebar" id="sidebar">
-      <div>
-        <div class="brand-pill">🚛 Gestion Camion Pro</div>
-        <p class="muted small" id="welcomeText">Chargement...</p>
-      </div>
-      <nav class="nav stack">
-        <button class="nav-btn active" data-view="dashboard">Dashboard</button>
-        <button class="nav-btn" data-view="camions">Camions</button>
-        <button class="nav-btn" data-view="chauffeurs">Chauffeurs</button>
-        <button class="nav-btn" data-view="voyages">Voyages</button>
-        <button class="nav-btn" data-view="entretien">Entretien</button>
-        <button class="nav-btn" data-view="depenses">Dépenses</button>
-        <button class="nav-btn" data-view="documents">Documents</button>
-        <button class="nav-btn" data-view="parametres">Paramètres</button>
-      </nav>
-      <button id="logoutBtn" class="btn danger">Déconnexion</button>
-    </aside>
-    <main class="main">
-      <div class="topbar">
-        <button id="menuBtn" class="btn secondary mobile-only">☰</button>
-        <div>
-          <h1 id="pageTitle">Dashboard</h1>
-          <p class="muted">Gestion complète des camions, voyages, entretien et dépenses.</p>
+      <div class="sidebar-head">
+        <div class="brand-wrap">
+          <div class="brand-mark small">GC</div>
+          <div>
+            <strong>Gestion Camion</strong>
+            <small>Admin</small>
+          </div>
         </div>
-        <input id="globalSearch" class="search" placeholder="Recherche rapide...">
+        <button class="icon-btn mobile-only" id="closeSidebar">✕</button>
       </div>
 
-      <section id="dashboardView" class="view active"></section>
-      <section id="camionsView" class="view"></section>
-      <section id="chauffeursView" class="view"></section>
-      <section id="voyagesView" class="view"></section>
-      <section id="entretienView" class="view"></section>
-      <section id="depensesView" class="view"></section>
-      <section id="documentsView" class="view"></section>
-      <section id="parametresView" class="view"></section>
+      <nav class="menu">
+        <button class="menu-item active" data-view="dashboard">Dashboard</button>
+        <button class="menu-item" data-view="camions">Camions</button>
+        <button class="menu-item" data-view="chauffeurs">Chauffeurs</button>
+        <button class="menu-item" data-view="voyages">Voyages</button>
+        <button class="menu-item" data-view="entretien">Entretien</button>
+        <button class="menu-item" data-view="depenses">Dépenses</button>
+        <button class="menu-item" data-view="parametres">Paramètres</button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <button id="logoutBtn" class="btn danger w-full">Déconnexion</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="mobile-head">
+        <button class="icon-btn mobile-only" id="openSidebar">☰</button>
+        <div>
+          <h1 id="pageTitle">Dashboard</h1>
+          <p class="muted" id="welcomeText">Chargement...</p>
+        </div>
+      </div>
+
+      <section id="dashboardView" class="view active section-space"></section>
+      <section id="camionsView" class="view section-space"></section>
+      <section id="chauffeursView" class="view section-space"></section>
+      <section id="voyagesView" class="view section-space"></section>
+      <section id="entretienView" class="view section-space"></section>
+      <section id="depensesView" class="view section-space"></section>
+      <section id="parametresView" class="view section-space"></section>
     </main>
   </div>
+
   <script type="module" src="../js/admin.js"></script>
 </body>
 </html>

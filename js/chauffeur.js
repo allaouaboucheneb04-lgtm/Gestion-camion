@@ -1,29 +1,161 @@
-import { auth, db, storage } from './firebase.js';
-import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { collection, addDoc, getDocs, query, where, doc, getDoc, updateDoc, deleteDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-import { ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
-import { money, fmtDate, esc, dtValue } from './helpers.js';
+import {
+  addVoyage, updateVoyage, deleteVoyage, getMesVoyages, uploadFile
+} from "./firebase.js";
+import {
+  money, formatDate, escapeHtml, formToObject, numberOrZero, dateTimeOrNull,
+  requireRole, bindLogout, installSW
+} from "./common.js";
 
-let me=null, trips=[], editId=null;
-onAuthStateChanged(auth, async user=>{
-  if(!user){window.location.href='../index.html';return;}
-  const snap=await getDoc(doc(db,'users',user.uid));
-  if(!snap.exists()){await signOut(auth); window.location.href='../index.html';return;}
-  me={uid:user.uid,...snap.data()};
-  if(me.role!=='chauffeur'){window.location.href='./admin.html'; return;}
-  driverWelcome.textContent=`Bienvenue ${me.name || me.email || 'Chauffeur'}`;
-  renderForm();
-  await loadTrips();
-  renderStats();
-  renderTrips();
-  logoutBtn.addEventListener('click',()=>signOut(auth).then(()=>window.location.href='../index.html'));
+const state = {
+  profile: null,
+  voyages: []
+};
+
+function dashboardHtml() {
+  const revenu = state.voyages.reduce((s, v) => s + numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour), 0);
+  const couts = state.voyages.reduce((s, v) => s + numberOrZero(v.gasoil) + numberOrZero(v.fraisMission) + numberOrZero(v.gasoilRetour) + numberOrZero(v.fraisMissionRetour), 0);
+  const benefice = revenu - couts;
+
+  return `
+    <div class="stats-grid">
+      <div class="card stat-card"><div class="label">Mes voyages</div><div class="value">${state.voyages.length}</div></div>
+      <div class="card stat-card"><div class="label">Revenu</div><div class="value">${money(revenu)}</div></div>
+      <div class="card stat-card"><div class="label">Coûts</div><div class="value">${money(couts)}</div></div>
+      <div class="card stat-card"><div class="label">Bénéfice estimé</div><div class="value">${money(benefice)}</div></div>
+    </div>
+  `;
+}
+
+function formHtml() {
+  return `
+    <div class="card">
+      <div class="card-header"><div><h2>Ajouter un voyage</h2><p class="muted">Le chauffeur ajoute uniquement ses voyages</p></div></div>
+      <form id="driverTripForm" class="form-grid">
+        <label><span>Nom du chauffeur</span><input name="nomChauffeur" value="${escapeHtml(state.profile.name || "")}" required></label>
+        <label><span>Client</span><input name="client" required></label>
+        <label><span>Destination</span><input name="destination" required></label>
+        <label><span>Date de départ</span><input name="dateDepart" type="datetime-local"></label>
+        <label><span>Date d'arrivée</span><input name="dateArrivee" type="datetime-local"></label>
+        <label><span>Prix de course</span><input name="prixCourse" type="number" step="0.01"></label>
+        <label><span>Gasoil</span><input name="gasoil" type="number" step="0.01"></label>
+        <label><span>Frais de mission</span><input name="fraisMission" type="number" step="0.01"></label>
+        <label><span>Auteur dépenses</span><input name="auteurDepenses" value="${escapeHtml(state.profile.name || "")}"></label>
+
+        <label><span>Client retour</span><input name="retourClient"></label>
+        <label><span>Destination retour</span><input name="retourDestination"></label>
+        <label><span>Date de retour</span><input name="dateRetour" type="datetime-local"></label>
+        <label><span>Date arrivée retour</span><input name="dateRetourArrivee" type="datetime-local"></label>
+        <label><span>Prix course retour</span><input name="prixCourseRetour" type="number" step="0.01"></label>
+        <label><span>Frais mission retour</span><input name="fraisMissionRetour" type="number" step="0.01"></label>
+        <label><span>Gasoil retour</span><input name="gasoilRetour" type="number" step="0.01"></label>
+        <label><span>Kilométrage après chèque 10 voyages</span><input name="kilometrageApres10Voyages" type="number" step="0.01"></label>
+        <label class="full"><span>Document du voyage (optionnel)</span><input type="file" name="voyageFile" accept="image/*,.pdf"></label>
+        <button class="btn primary full" type="submit">Ajouter le voyage</button>
+      </form>
+    </div>
+  `;
+}
+
+function tripsHtml() {
+  return `
+    <div class="card">
+      <div class="card-header"><div><h2>Mes voyages</h2><p class="muted">Modification rapide disponible</p></div></div>
+      <div class="list">
+        ${state.voyages.length ? state.voyages.map(v => `
+          <div class="item-card">
+            <h4>${escapeHtml(v.client || "-")} → ${escapeHtml(v.destination || "-")}</h4>
+            <p>Départ : ${formatDate(v.dateDepart)} | Arrivée : ${formatDate(v.dateArrivee)}</p>
+            <p>Prix : ${money(v.prixCourse)} | Gasoil : ${money(v.gasoil)} | Frais mission : ${money(v.fraisMission)}</p>
+            <p>Retour : ${escapeHtml(v.retourClient || "-")} → ${escapeHtml(v.retourDestination || "-")}</p>
+            <p>Prix retour : ${money(v.prixCourseRetour)} | Gasoil retour : ${money(v.gasoilRetour)} | Frais retour : ${money(v.fraisMissionRetour)}</p>
+            ${v.documentUrl ? `<p><a href="${v.documentUrl}" target="_blank" rel="noopener">Voir le document</a></p>` : ""}
+            <div class="actions">
+              <button class="btn secondary" data-edit-voyage="${v.id}">Modifier</button>
+              <button class="btn danger" data-delete-voyage="${v.id}">Supprimer</button>
+            </div>
+          </div>
+        `).join("") : `<div class="item-card"><p>Aucun voyage pour le moment.</p></div>`}
+      </div>
+    </div>
+  `;
+}
+
+function render() {
+  document.getElementById("driverDashboard").innerHTML = dashboardHtml();
+  document.getElementById("driverFormView").innerHTML = formHtml();
+  document.getElementById("driverTripsView").innerHTML = tripsHtml();
+  bindForm();
+  bindActions();
+}
+
+async function refreshData() {
+  state.voyages = await getMesVoyages();
+  render();
+}
+
+function pick(id) {
+  return state.voyages.find(v => v.id === id);
+}
+
+function bindActions() {
+  document.querySelectorAll("[data-delete-voyage]").forEach(btn => btn.addEventListener("click", async () => {
+    if (!confirm("Supprimer ce voyage ?")) return;
+    await deleteVoyage(btn.dataset.deleteVoyage);
+    await refreshData();
+  }));
+  document.querySelectorAll("[data-edit-voyage]").forEach(btn => btn.addEventListener("click", async () => {
+    const item = pick(btn.dataset.editVoyage);
+    const client = prompt("Client", item.client || "");
+    if (client === null) return;
+    const destination = prompt("Destination", item.destination || "");
+    if (destination === null) return;
+    const prixCourse = prompt("Prix de course", item.prixCourse || 0);
+    if (prixCourse === null) return;
+    const gasoil = prompt("Gasoil", item.gasoil || 0);
+    if (gasoil === null) return;
+    const fraisMission = prompt("Frais de mission", item.fraisMission || 0);
+    if (fraisMission === null) return;
+    await updateVoyage(item.id, {
+      client,
+      destination,
+      prixCourse: numberOrZero(prixCourse),
+      gasoil: numberOrZero(gasoil),
+      fraisMission: numberOrZero(fraisMission)
+    });
+    await refreshData();
+  }));
+}
+
+function bindForm() {
+  document.getElementById("driverTripForm")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const data = formToObject(form);
+    data.chauffeurId = state.profile.id;
+    ["prixCourse","gasoil","fraisMission","prixCourseRetour","fraisMissionRetour","gasoilRetour","kilometrageApres10Voyages"].forEach(k => data[k] = numberOrZero(data[k]));
+    ["dateDepart","dateArrivee","dateRetour","dateRetourArrivee"].forEach(k => data[k] = dateTimeOrNull(data[k]));
+    const file = form.voyageFile.files[0];
+    delete data.voyageFile;
+    const ref = await addVoyage(data);
+    if (file) {
+      const url = await uploadFile(`voyages/${ref.id}/${file.name}`, file);
+      await updateVoyage(ref.id, { documentUrl: url });
+    }
+    form.reset();
+    await refreshData();
+  });
+}
+
+async function init() {
+  installSW();
+  bindLogout();
+  const { profile } = await requireRole("chauffeur");
+  state.profile = profile;
+  document.getElementById("driverWelcome").textContent = `Bienvenue ${profile.name || "Chauffeur"}`;
+  await refreshData();
+}
+
+init().catch(err => {
+  console.error(err);
+  alert(err.message || "Erreur de chargement chauffeur");
 });
-function renderForm(){ driverTripForm.innerHTML=`<label><span>Client</span><input id="client"></label><label><span>Destination</span><input id="destination"></label><label><span>Date départ</span><input id="dateDepart" type="datetime-local"></label><label><span>Date arrivée</span><input id="dateArrivee" type="datetime-local"></label><label><span>Prix course</span><input id="prixCourse" type="number"></label><label><span>Gasoil</span><input id="gasoil" type="number"></label><label><span>Frais mission</span><input id="fraisMission" type="number"></label><label><span>Client retour</span><input id="retourClient"></label><label><span>Destination retour</span><input id="retourDestination"></label><label><span>Date retour</span><input id="dateRetour" type="datetime-local"></label><label><span>Date arrivée retour</span><input id="dateRetourArrivee" type="datetime-local"></label><label><span>Prix retour</span><input id="prixCourseRetour" type="number"></label><label><span>Gasoil retour</span><input id="gasoilRetour" type="number"></label><label><span>Frais mission retour</span><input id="fraisMissionRetour" type="number"></label><label><span>Camion (ID ou numéro)</span><input id="camionId"></label><label class="full"><span>Kilométrage après chèque 10 voyages</span><input id="kilometrageApres10Voyages" type="number"></label><label class="full"><span>Document voyage</span><input id="voyageFile" type="file"></label><div class="full actions"><button class="btn primary">${editId?'Mettre à jour':'Enregistrer'}</button>${editId?'<button type="button" id="cancelEdit" class="btn secondary">Annuler</button>':''}</div>`; driverTripForm.addEventListener('submit',saveTrip); document.getElementById('cancelEdit')?.addEventListener('click',()=>{editId=null; renderForm();}); if(editId){ const x=trips.find(t=>t.id===editId); if(x){ ['client','destination','prixCourse','gasoil','fraisMission','retourClient','retourDestination','prixCourseRetour','gasoilRetour','fraisMissionRetour','camionId','kilometrageApres10Voyages'].forEach(k=>document.getElementById(k).value=x[k]||''); ['dateDepart','dateArrivee','dateRetour','dateRetourArrivee'].forEach(k=>document.getElementById(k).value=dtValue(x[k])); } } }
-async function saveTrip(e){ e.preventDefault(); let fileUrl=trips.find(t=>t.id===editId)?.fileUrl || ''; if(voyageFile.files[0]){ const path=`voyages/${editId||Date.now()}/${voyageFile.files[0].name}`; const snap=await uploadBytes(ref(storage,path),voyageFile.files[0]); fileUrl=await getDownloadURL(snap.ref); }
- const payload={chauffeurId:me.uid,nomChauffeur:me.name || me.email || '',camionId:camionId.value.trim(),client:client.value.trim(),destination:destination.value.trim(),dateDepart:dateDepart.value?new Date(dateDepart.value):null,dateArrivee:dateArrivee.value?new Date(dateArrivee.value):null,prixCourse:Number(prixCourse.value||0),gasoil:Number(gasoil.value||0),fraisMission:Number(fraisMission.value||0),retourClient:retourClient.value.trim(),retourDestination:retourDestination.value.trim(),dateRetour:dateRetour.value?new Date(dateRetour.value):null,dateRetourArrivee:dateRetourArrivee.value?new Date(dateRetourArrivee.value):null,prixCourseRetour:Number(prixCourseRetour.value||0),gasoilRetour:Number(gasoilRetour.value||0),fraisMissionRetour:Number(fraisMissionRetour.value||0),kilometrageApres10Voyages:Number(kilometrageApres10Voyages.value||0),fileUrl,updatedAt:serverTimestamp()};
- if(editId){ await updateDoc(doc(db,'voyages',editId),payload); editId=null; } else { payload.createdBy=me.uid; payload.createdAt=serverTimestamp(); await addDoc(collection(db,'voyages'),payload); }
- renderForm(); await loadTrips(); renderStats(); renderTrips(); }
-async function loadTrips(){ const snap=await getDocs(query(collection(db,'voyages'), where('chauffeurId','==',me.uid))); trips=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)); }
-function renderStats(){ const revenu=trips.reduce((s,t)=>s+Number(t.prixCourse||0)+Number(t.prixCourseRetour||0),0); const couts=trips.reduce((s,t)=>s+Number(t.gasoil||0)+Number(t.fraisMission||0)+Number(t.gasoilRetour||0)+Number(t.fraisMissionRetour||0),0); driverStats.innerHTML=`<div class="card stat"><div class="muted">Mes voyages</div><div class="value">${trips.length}</div></div><div class="card stat"><div class="muted">Mon revenu</div><div class="value">${money(revenu)}</div></div><div class="card stat"><div class="muted">Mes coûts</div><div class="value">${money(couts)}</div></div><div class="card stat"><div class="muted">Net estimé</div><div class="value">${money(revenu-couts)}</div></div>`; }
-function renderTrips(){ driverTripList.innerHTML=trips.map(t=>`<div class="item"><div><h3>${esc(t.client||'-')} → ${esc(t.destination||'-')}</h3><p>Départ: ${fmtDate(t.dateDepart)} • Arrivée: ${fmtDate(t.dateArrivee)}</p><p>Aller: ${money(t.prixCourse)} • Retour: ${money(t.prixCourseRetour)}</p><p>Gasoil total: ${money(Number(t.gasoil||0)+Number(t.gasoilRetour||0))}</p><p>${t.fileUrl?`<a target="_blank" href="${t.fileUrl}">Ouvrir document</a>`:''}</p></div><div class="actions"><button class="btn small secondary mod" data-id="${t.id}">Modifier</button><button class="btn small danger del" data-id="${t.id}">Supprimer</button></div></div>`).join('') || '<div class="empty">Aucun voyage</div>'; document.querySelectorAll('.mod').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.id; renderForm(); window.scrollTo({top:0,behavior:'smooth'});})); document.querySelectorAll('.del').forEach(b=>b.addEventListener('click',()=>removeTrip(b.dataset.id))); }
-async function removeTrip(id){ if(!confirm('Supprimer ce voyage ?')) return; await deleteDoc(doc(db,'voyages',id)); await loadTrips(); renderStats(); renderTrips(); }

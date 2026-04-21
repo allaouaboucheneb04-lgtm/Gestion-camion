@@ -3,29 +3,44 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gestion Camion Pro</title>
-  <meta name="theme-color" content="#0f172a" />
+  <title>Gestion Camion Pro Ultra</title>
+  <meta name="theme-color" content="#0f172a">
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body class="auth-body">
   <div class="auth-wrap">
     <div class="auth-card card">
-      <div class="brand-pill">🚛 Gestion Camion Pro</div>
-      <h1>Connexion</h1>
-      <p class="muted">Admin et chauffeur dans la même application.</p>
+      <div class="brand-mark">GC</div>
+      <h1>Gestion Camion Pro Ultra</h1>
+      <p class="muted">Connexion admin / chauffeur</p>
+
       <form id="loginForm" class="stack">
-        <label><span>Email</span><input id="email" type="email" placeholder="admin@exemple.com" required></label>
-        <label><span>Mot de passe</span><input id="password" type="password" placeholder="••••••••" required></label>
-        <button class="btn primary" type="submit">Se connecter</button>
+        <label>
+          <span>Email</span>
+          <input id="email" type="email" placeholder="exemple@domaine.com" required />
+        </label>
+
+        <label>
+          <span>Mot de passe</span>
+          <input id="password" type="password" placeholder="••••••••" required />
+        </label>
+
+        <button class="btn primary" type="submit">Connexion</button>
+        <div id="loginMessage" class="helper error"></div>
       </form>
-      <p id="loginMsg" class="msg"></p>
-      <div class="card soft mt16">
-        <strong>Avant de tester</strong>
-        <p class="muted">Remplace les clés dans <code>js/firebase.js</code>, active Email/Password, puis crée les documents <code>users/{uid}</code>.</p>
+
+      <div class="auth-info">
+        <p><strong>Étapes Firebase :</strong></p>
+        <ol>
+          <li>Créer l'utilisateur dans Firebase Auth</li>
+          <li>Créer le document <code>users/{uid}</code></li>
+          <li>Ajouter le rôle <code>admin</code> ou <code>chauffeur</code></li>
+        </ol>
       </div>
     </div>
   </div>
+
   <script type="module" src="js/login.js"></script>
 </body>
 </html>
