@@ -1,46 +1,71 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chauffeur - Gestion Camion</title>
-  <link rel="stylesheet" href="../css/style.css" />
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chauffeur - Gestion Entreprise Camions</title>
+<link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
-  <div class="app-shell compact-shell">
-    <main class="main">
-      <header class="topbar">
-        <div>
-          <h1>Mon espace chauffeur</h1>
-          <p class="muted" id="driverWelcome">Chargement...</p>
-        </div>
-        <button id="logoutBtn" class="btn danger">Déconnexion</button>
-      </header>
+<div id="overlay" class="overlay"></div>
+<div class="app">
+  <aside id="sidebar" class="sidebar">
+    <div class="side-head">
+      <div><h2>Espace Chauffeur</h2><p class="muted">Mes données</p></div>
+      <button id="closeMenu" class="close-menu">✕</button>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn active" data-section="home">Accueil</button>
+      <button class="nav-btn" data-section="myTrips">Mes voyages</button>
+      <button class="nav-btn" data-section="myTruck">Mon camion</button>
+    </nav>
+    <button id="logoutBtn" class="btnDanger">Déconnexion</button>
+  </aside>
 
-      <section class="grid stats-grid" id="driverStats"></section>
+  <main class="main">
+    <div class="mobile-top">
+      <button id="menuToggle" class="menu-btn">☰</button>
+      <div><h1 style="margin:0">Chauffeur</h1><p class="muted">Mon espace</p></div>
+    </div>
 
-      <section class="card">
-        <div class="card-header between">
-          <div>
-            <h2>Ajouter un voyage</h2>
-            <p class="muted">Le chauffeur peut ajouter ses voyages et dépenses autorisées.</p>
-          </div>
-        </div>
-        <form id="driverTripForm" class="form-grid"></form>
-      </section>
+    <section id="homeSection" class="section active">
+      <div class="stats">
+        <div class="stat"><span>Mes voyages</span><strong id="myTripCount">0</strong></div>
+        <div class="stat"><span>Mon revenu</span><strong id="myRevenue">0 $</strong></div>
+        <div class="stat"><span>Mon camion</span><strong id="myTruckKpi">-</strong></div>
+        <div class="stat"><span>Kilométrage après 10 voyages</span><strong id="myOdo">-</strong></div>
+      </div>
+    </section>
 
-      <section class="card">
-        <div class="card-header between">
-          <div>
-            <h2>Mes voyages</h2>
-            <p class="muted">Historique lié à votre compte.</p>
-          </div>
-        </div>
-        <div id="driverTripList" class="list"></div>
-      </section>
-    </main>
-  </div>
+    <section id="myTripsSection" class="section">
+      <div class="panel">
+        <h3>Ajouter un voyage</h3>
+        <form id="driverTripForm" class="form-grid">
+          <input name="client" placeholder="Client" required>
+          <input name="destination" placeholder="Destination" required>
+          <input name="departDate" type="date" required>
+          <input name="arrivalDate" type="date">
+          <input name="price" type="number" step="0.01" placeholder="Prix de course" required>
+          <input name="fuel" type="number" step="0.01" placeholder="Gasoil">
+          <input name="missionFees" type="number" step="0.01" placeholder="Frais de mission">
+          <input name="authorExpense" placeholder="Auteur, dépenses">
+          <input name="returnClient" placeholder="Client retour">
+          <input name="returnDestination" placeholder="Destination retour">
+          <input name="returnDate" type="date">
+          <input name="returnArrivalDate" type="date">
+          <input name="returnPrice" type="number" step="0.01" placeholder="Prix retour">
+          <input name="returnMissionFees" type="number" step="0.01" placeholder="Frais mission retour">
+          <input name="returnFuel" type="number" step="0.01" placeholder="Gasoil retour">
+          <button class="btn full" type="submit">Enregistrer</button>
+        </form>
+      </div>
+      <div class="panel"><h3>Mes voyages</h3><div id="myTripCards" class="cards"></div></div>
+    </section>
 
-  <script type="module" src="../js/chauffeur.js"></script>
-</body>
-</html>
+    <section id="myTruckSection" class="section">
+      <div class="panel"><h3>Mon camion assigné</h3><div id="myTruckCard" class="cards"></div></div>
+    </section>
+  </main>
+</div>
+<script type="module" src="../js/firebase.js"></script>
+<script type="module" src="../js/chauffeur.js"></script>
+</body></html>

@@ -1,55 +1,6 @@
-# Gestion Camion Pro Max 2
+# Gestion Entreprise Camions - Version Pro
 
-## Inclus
-- Firebase Web SDK moderne (module)
-- Connexion email/mot de passe
-- Rôles `admin` et `chauffeur`
-- Dashboard admin
-- Espace chauffeur
-- Camions, chauffeurs, voyages, entretien, dépenses
-- Calcul revenu / coûts / bénéfice
-- PWA installable
-- `firestore.rules`
-
-## Collections Firestore
-- `users`
-- `trucks`
-- `drivers`
-- `trips`
-- `maintenance`
-- `expenses`
-
-## Rôle utilisateur
-Dans `users/{uid}` ajoute par exemple:
-```json
-{
-  "name": "Alaoua",
-  "email": "admin@exemple.com",
-  "role": "admin"
-}
-```
-Pour un chauffeur:
-```json
-{
-  "name": "Karim",
-  "email": "karim@exemple.com",
-  "role": "chauffeur"
-}
-```
-
-## Déploiement
-1. Ouvre Firebase et active Authentication > Email/Password
-2. Crée Firestore Database
-3. Déploie les règles du fichier `firestore.rules`
-4. Héberge le dossier sur Netlify, GitHub Pages ou Firebase Hosting
-
-## Remarques
-- Le bouton `Modifier` fait une modification rapide du champ `note`
-- Le code est prêt pour être étendu avec PDF, graphiques et notifications
-
-
-
-## Informations métier intégrées
+## Ce projet gère
 ### Camion
 - Numéro de camion
 - Numéro de plaque
@@ -78,7 +29,7 @@ Pour un chauffeur:
 - Gasoil
 
 ### Chauffeur
-- Nom de chauffeur
+- Nom du chauffeur
 - Numéro de chauffeur
 - Numéro de permis
 - Adresse
@@ -92,16 +43,50 @@ Pour un chauffeur:
 - Tout hôtel réparation
 
 ### Autre dépense
-- Assurance chauffeur
+- ASSURANCE, chauffeur
 - Frais comptable
 - Déclaration d’impôts
-- Salaire chauffeur
+- Salaire, chauffeur
 - Assurance du camion
-- Assurance de marchandise
+- Assurance, de marchandise
 
+## Dashboard admin
+- Revenus
+- Dépenses
+- Bénéfice
+- Rapport global
 
-## Affichage des champs métier
-La version mise à jour affiche maintenant dans les cartes :
-- camion : remorque + plaque remorque + remarque
-- chauffeur : email + kilométrage après 10 voyages
-- voyage : gasoil, frais de mission, auteur des dépenses, informations de retour
+## Espace chauffeur
+- Voir ses voyages
+- Ajouter ses voyages
+- Voir son camion assigné
+
+## Firebase
+Déjà configuré avec ton projet `gestion-camion-93e44`
+
+### À faire dans Firebase
+1. Activer Authentication > Email / Password
+2. Activer Firestore Database
+3. Déployer `firestore.rules`
+4. Créer les users dans Authentication
+5. Créer dans Firestore la collection `users`
+
+Exemple:
+users/{uid}
+- role: "admin"
+- email: "admin@exemple.com"
+
+ou
+
+users/{uid}
+- role: "chauffeur"
+- email: "chauffeur@exemple.com"
+
+## Collections utilisées
+- users
+- camions
+- chauffeurs
+- voyages
+- entretiens
+- depenses
+- assignations

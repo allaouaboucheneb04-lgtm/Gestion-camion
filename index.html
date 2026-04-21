@@ -1,45 +1,48 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" dir="ltr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gestion Camion Pro Max 2</title>
-  <meta name="theme-color" content="#0f172a" />
-  <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/style.css" />
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestion Entreprise Camions</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563eb">
+<link rel="stylesheet" href="css/style.css">
 </head>
-<body class="auth-body">
-  <div class="auth-wrap">
-    <div class="auth-card glass">
-      <div class="brand-badge">GC</div>
-      <h1>Gestion Camion</h1>
-      <p class="muted">Connexion / تسجيل الدخول</p>
-
-      <div class="lang-switch">
-        <button class="chip active" data-lang="fr">FR</button>
-        <button class="chip" data-lang="ar">AR</button>
-      </div>
-
-      <form id="loginForm" class="stack">
-        <label>
-          <span data-i18n="email">Email</span>
-          <input id="email" type="email" placeholder="admin@exemple.com" required />
-        </label>
-        <label>
-          <span data-i18n="password">Mot de passe</span>
-          <input id="password" type="password" placeholder="••••••••" required />
-        </label>
-        <button class="btn primary" type="submit" data-i18n="login">Connexion</button>
-      </form>
-
-      <p id="loginMsg" class="form-msg"></p>
-
-      <div class="auth-footer">
-        <small data-i18n="hint">Crée un utilisateur dans Firebase Auth puis ajoute son rôle dans Firestore.</small>
-      </div>
+<body class="auth-wrap">
+<div class="auth-grid">
+  <div class="brand">
+    <button id="langToggle" class="btnGhost" type="button" style="float:right">AR</button>
+    <h1>Gestion Entreprise Camions</h1>
+    <p data-i18n="tagline">Application pro pour gérer camions, chauffeurs, voyages, entretiens et dépenses.</p>
+    <div class="panel" style="margin-top:18px">
+      <h3 data-i18n="included">Inclus</h3>
+      <ul>
+        <li>Admin / Chauffeur</li>
+        <li>Camions & remorques</li>
+        <li>Voyages aller / retour</li>
+        <li>Entretien camion / remorque</li>
+        <li>Dépenses entreprise</li>
+        <li>Dashboard revenus / dépenses / bénéfice</li>
+      </ul>
     </div>
   </div>
-
-  <script type="module" src="js/login.js"></script>
+  <div class="auth-card">
+    <h2 data-i18n="loginTitle">Connexion</h2>
+    <p class="muted" data-i18n="loginSub">Compte admin ou chauffeur</p>
+    <form id="loginForm" class="stack">
+      <label><span data-i18n="email">Email</span><input id="email" type="email" required placeholder="email@exemple.com"></label>
+      <label><span data-i18n="password">Mot de passe</span><input id="password" type="password" required placeholder="••••••••"></label>
+      <button class="btn" type="submit" data-i18n="login">Se connecter</button>
+    </form>
+    <div id="installBox" class="install hidden">
+      <span data-i18n="install">Installer l'application</span>
+      <button id="installBtn" class="btn2" type="button">Installer</button>
+    </div>
+    <p id="msg" class="message"></p>
+  </div>
+</div>
+<script type="module" src="js/i18n.js"></script>
+<script type="module" src="js/firebase.js"></script>
+<script type="module" src="js/auth.js"></script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js'));}</script>
 </body>
 </html>

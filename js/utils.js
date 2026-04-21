@@ -1,0 +1,7 @@
+export const qs=s=>document.querySelector(s); export const qsa=s=>[...document.querySelectorAll(s)];
+export const money=v=>new Intl.NumberFormat("fr-CA",{style:"currency",currency:"CAD",maximumFractionDigits:2}).format(Number(v||0));
+export const shortDate=v=>v?new Date(v).toLocaleDateString("fr-CA"):"-";
+export const today=()=>new Date().toISOString().slice(0,10);
+export function drawChart(canvas, revenue, expense, profit){ const ctx=canvas.getContext("2d"); const W=canvas.clientWidth||600, H=canvas.clientHeight||140; canvas.width=W*devicePixelRatio; canvas.height=H*devicePixelRatio; ctx.scale(devicePixelRatio,devicePixelRatio); ctx.clearRect(0,0,W,H); const vals=[revenue,expense,profit], labels=["Revenus","Dépenses","Bénéfice"], colors=["#2563eb","#dc2626","#16a34a"], max=Math.max(...vals,1), bw=90, gap=40, by=H-28; vals.forEach((v,i)=>{const x=34+i*(bw+gap), bh=Math.max(8, (v/max)*(H-70)); ctx.fillStyle=colors[i]; ctx.fillRect(x,by-bh,bw,bh); ctx.fillStyle="#334155"; ctx.font="13px Arial"; ctx.fillText(labels[i],x,H-8); ctx.fillText(Math.round(v)+" $",x,by-bh-6);});}
+export function openMobileMenu(){ const s=qs("#sidebar"), o=qs("#overlay"); s?.classList.add("open"); o?.classList.add("show"); document.body.style.overflow="hidden"; }
+export function closeMobileMenu(){ const s=qs("#sidebar"), o=qs("#overlay"); s?.classList.remove("open"); o?.classList.remove("show"); document.body.style.overflow=""; }
