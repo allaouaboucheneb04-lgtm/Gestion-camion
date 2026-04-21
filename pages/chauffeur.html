@@ -3,48 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chauffeur - Gestion Camion Pro</title>
+  <title>Chauffeur | Gestion Camion Pro</title>
   <link rel="stylesheet" href="../css/style.css" />
 </head>
 <body>
-  <div class="app-shell compact-shell">
-    <main class="main">
-      <header class="topbar">
-        <div>
-          <h1>Mon espace chauffeur</h1>
-          <p class="muted" id="driverWelcome">Chargement...</p>
-        </div>
-        <button id="logoutBtn" class="btn danger">Déconnexion</button>
-      </header>
-
-      <section class="grid stats-grid" id="driverStats"></section>
-
-      <section class="section-space">
-        <section class="card">
-          <div class="card-header between">
-            <div>
-              <h2 id="driverFormTitle">Ajouter un voyage</h2>
-              <p class="muted">Le chauffeur peut enregistrer ses voyages aller et retour.</p>
-            </div>
-            <button type="button" id="driverCancelEdit" class="btn secondary" style="display:none">Annuler</button>
-          </div>
-          <form id="driverTripForm" class="form-grid"></form>
-        </section>
-
-        <section class="card">
-          <div class="card-header between">
-            <div>
-              <h2>Mes voyages</h2>
-              <p class="muted">Historique lié à votre compte.</p>
-            </div>
-            <input id="driverSearch" class="search" placeholder="Recherche client / destination" />
-          </div>
-          <div id="driverTripList" class="list"></div>
-        </section>
+  <div class="driver-shell">
+    <header class="topbar">
+      <div>
+        <div class="brand-pill">🚛 Espace Chauffeur</div>
+        <p class="muted" id="driverWelcome">Chargement...</p>
+      </div>
+      <button id="logoutBtn" class="btn danger">Déconnexion</button>
+    </header>
+    <section id="driverStats" class="stats-grid"></section>
+    <div class="grid-2 mt16">
+      <section class="card">
+        <div class="section-title"><h2>Ajouter / modifier un voyage</h2><p class="muted">Le chauffeur gère seulement ses propres voyages.</p></div>
+        <form id="driverTripForm" class="form-grid"></form>
       </section>
-    </main>
+      <section class="card">
+        <div class="section-title"><h2>Mes voyages</h2><p class="muted">Tu peux modifier, supprimer et joindre un document.</p></div>
+        <div id="driverTripList" class="stack"></div>
+      </section>
+    </div>
   </div>
-
   <script type="module" src="../js/chauffeur.js"></script>
 </body>
 </html>

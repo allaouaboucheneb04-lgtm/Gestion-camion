@@ -3,68 +3,48 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin - Gestion Camion Pro</title>
+  <title>Admin | Gestion Camion Pro</title>
   <link rel="stylesheet" href="../css/style.css" />
 </head>
 <body>
-  <div class="app-shell">
+  <div class="layout">
     <aside class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <div class="brand-row">
-          <span class="brand-badge">GC</span>
-          <div>
-            <strong>Gestion Camion</strong>
-            <small>Administration</small>
-          </div>
-        </div>
-        <button id="closeMenu" class="close-menu" aria-label="Fermer">✕</button>
+      <div>
+        <div class="brand-pill">🚛 Gestion Camion Pro</div>
+        <p class="muted small" id="welcomeText">Chargement...</p>
       </div>
-
-      <nav class="menu nav-list">
-        <button class="menu-item nav-btn active" data-view="dashboard">Dashboard</button>
-        <button class="menu-item nav-btn" data-view="trucks">Camions</button>
-        <button class="menu-item nav-btn" data-view="drivers">Chauffeurs</button>
-        <button class="menu-item nav-btn" data-view="trips">Voyages</button>
-        <button class="menu-item nav-btn" data-view="maintenance">Entretien</button>
-        <button class="menu-item nav-btn" data-view="expenses">Autres dépenses</button>
-        <button class="menu-item nav-btn" data-view="settings">Réglages</button>
+      <nav class="nav stack">
+        <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+        <button class="nav-btn" data-view="camions">Camions</button>
+        <button class="nav-btn" data-view="chauffeurs">Chauffeurs</button>
+        <button class="nav-btn" data-view="voyages">Voyages</button>
+        <button class="nav-btn" data-view="entretien">Entretien</button>
+        <button class="nav-btn" data-view="depenses">Dépenses</button>
+        <button class="nav-btn" data-view="documents">Documents</button>
+        <button class="nav-btn" data-view="parametres">Paramètres</button>
       </nav>
-
-      <div class="sidebar-bottom">
-        <button id="logoutBtn" class="btn danger w-full">Déconnexion</button>
-      </div>
+      <button id="logoutBtn" class="btn danger">Déconnexion</button>
     </aside>
-
     <main class="main">
-      <div class="mobile-topbar">
-        <button id="menuToggle" class="menu-btn" aria-label="Ouvrir le menu">☰</button>
-        <div class="mobile-title-box">
-          <h1 id="pageTitleMobile">Dashboard</h1>
-          <p class="muted" id="welcomeTextMobile">Chargement...</p>
-        </div>
-      </div>
-      <div id="menuOverlay" class="menu-overlay"></div>
-
-      <header class="topbar">
+      <div class="topbar">
+        <button id="menuBtn" class="btn secondary mobile-only">☰</button>
         <div>
           <h1 id="pageTitle">Dashboard</h1>
-          <p class="muted" id="welcomeText">Chargement...</p>
+          <p class="muted">Gestion complète des camions, voyages, entretien et dépenses.</p>
         </div>
-        <div class="topbar-actions" style="width:min(100%,380px)">
-          <input id="globalSearch" class="search" placeholder="Recherche rapide..." />
-        </div>
-      </header>
+        <input id="globalSearch" class="search" placeholder="Recherche rapide...">
+      </div>
 
       <section id="dashboardView" class="view active"></section>
-      <section id="trucksView" class="view"></section>
-      <section id="driversView" class="view"></section>
-      <section id="tripsView" class="view"></section>
-      <section id="maintenanceView" class="view"></section>
-      <section id="expensesView" class="view"></section>
-      <section id="settingsView" class="view"></section>
+      <section id="camionsView" class="view"></section>
+      <section id="chauffeursView" class="view"></section>
+      <section id="voyagesView" class="view"></section>
+      <section id="entretienView" class="view"></section>
+      <section id="depensesView" class="view"></section>
+      <section id="documentsView" class="view"></section>
+      <section id="parametresView" class="view"></section>
     </main>
   </div>
-
   <script type="module" src="../js/admin.js"></script>
 </body>
 </html>

@@ -3,43 +3,29 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gestion Camion Pro Max 2</title>
+  <title>Gestion Camion Pro</title>
   <meta name="theme-color" content="#0f172a" />
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body class="auth-body">
   <div class="auth-wrap">
-    <div class="auth-card glass">
-      <div class="brand-badge">GC</div>
-      <h1>Gestion Camion</h1>
-      <p class="muted">Connexion / تسجيل الدخول</p>
-
-      <div class="lang-switch">
-        <button class="chip active" data-lang="fr">FR</button>
-        <button class="chip" data-lang="ar">AR</button>
-      </div>
-
+    <div class="auth-card card">
+      <div class="brand-pill">🚛 Gestion Camion Pro</div>
+      <h1>Connexion</h1>
+      <p class="muted">Admin et chauffeur dans la même application.</p>
       <form id="loginForm" class="stack">
-        <label>
-          <span data-i18n="email">Email</span>
-          <input id="email" type="email" placeholder="admin@exemple.com" required />
-        </label>
-        <label>
-          <span data-i18n="password">Mot de passe</span>
-          <input id="password" type="password" placeholder="••••••••" required />
-        </label>
-        <button class="btn primary" type="submit" data-i18n="login">Connexion</button>
+        <label><span>Email</span><input id="email" type="email" placeholder="admin@exemple.com" required></label>
+        <label><span>Mot de passe</span><input id="password" type="password" placeholder="••••••••" required></label>
+        <button class="btn primary" type="submit">Se connecter</button>
       </form>
-
-      <p id="loginMsg" class="form-msg"></p>
-
-      <div class="auth-footer">
-        <small data-i18n="hint">Crée un utilisateur dans Firebase Auth puis ajoute son rôle dans Firestore.</small>
+      <p id="loginMsg" class="msg"></p>
+      <div class="card soft mt16">
+        <strong>Avant de tester</strong>
+        <p class="muted">Remplace les clés dans <code>js/firebase.js</code>, active Email/Password, puis crée les documents <code>users/{uid}</code>.</p>
       </div>
     </div>
   </div>
-
   <script type="module" src="js/login.js"></script>
 </body>
 </html>

@@ -1,700 +1,90 @@
-import { auth, db } from './firebase.js';
+import { auth, db, storage } from './firebase.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import {
-  collection, addDoc, getDocs, serverTimestamp,
-  updateDoc, deleteDoc, doc, getDoc
-} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-import { money, fmtDate, slugContains } from './helpers.js';
+import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
+import { money, fmtDate, contains, esc, dtValue } from './helpers.js';
 
-const state = {
-  me: null,
-  search: '',
-  currentView: 'dashboard',
-  trucks: [],
-  drivers: [],
-  trips: [],
-  maintenance: [],
-  expenses: [],
-  editing: {
-    trucks: null,
-    drivers: null,
-    trips: null,
-    maintenance: null,
-    expenses: null
-  }
-};
+const state={me:null,search:'',camions:[],chauffeurs:[],voyages:[],entretien:[],depenses:[],parametres:null};
+const views=['dashboard','camions','chauffeurs','voyages','entretien','depenses','documents','parametres'];
+let editing={camions:null,chauffeurs:null,voyages:null,entretien:null,depenses:null};
 
-const collections = ['trucks', 'drivers', 'trips', 'maintenance', 'expenses'];
-const viewTitles = {
-  dashboard: 'Dashboard',
-  trucks: 'Camions',
-  drivers: 'Chauffeurs',
-  trips: 'Voyages',
-  maintenance: 'Entretien',
-  expenses: 'Autres dépenses',
-  settings: 'Réglages'
-};
-
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
-    window.location.href = '../index.html';
-    return;
-  }
-
-  const profileSnap = await getDoc(doc(db, 'users', user.uid));
-  if (!profileSnap.exists() || profileSnap.data().role !== 'admin') {
-    await signOut(auth);
-    window.location.href = '../index.html';
-    return;
-  }
-
-  state.me = { uid: user.uid, ...profileSnap.data() };
-  const welcome = `Bienvenue ${state.me.name || state.me.email || 'Admin'}`;
-  byId('welcomeText').textContent = welcome;
-  byId('welcomeTextMobile').textContent = welcome;
-
-  bindShell();
-  await refreshAll();
+onAuthStateChanged(auth, async user=>{
+  if(!user){window.location.href='../index.html';return;}
+  const meSnap=await getDoc(doc(db,'users',user.uid));
+  if(!meSnap.exists()||meSnap.data().role!=='admin'){ await signOut(auth); window.location.href='../index.html'; return; }
+  state.me={uid:user.uid,...meSnap.data()};
+  welcomeText.textContent=`Bienvenue ${state.me.name || state.me.email || 'Admin'}`;
+  bindBase();
+  await loadAll();
+  renderAll();
 });
 
-function bindShell() {
-  document.querySelectorAll('[data-view]').forEach((btn) => {
-    btn.addEventListener('click', () => switchView(btn.dataset.view));
-  });
-
-  byId('globalSearch').addEventListener('input', (e) => {
-    state.search = e.target.value.trim();
-    renderCurrentView();
-  });
-
-  byId('logoutBtn').addEventListener('click', async () => {
-    await signOut(auth);
-    window.location.href = '../index.html';
-  });
-
-  byId('menuToggle').addEventListener('click', openMenu);
-  byId('closeMenu').addEventListener('click', closeMenu);
-  byId('menuOverlay').addEventListener('click', closeMenu);
-  window.addEventListener('resize', () => {
-    if (window.innerWidth > 900) closeMenu();
-  });
+function bindBase(){
+  document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>switchView(btn.dataset.view)));
+  globalSearch.addEventListener('input',e=>{state.search=e.target.value; renderAll();});
+  logoutBtn.addEventListener('click',()=>signOut(auth).then(()=>window.location.href='../index.html'));
+  menuBtn?.addEventListener('click',()=>sidebar.classList.toggle('open'));
 }
-
-async function refreshAll() {
-  for (const name of collections) {
-    state[name] = await readCollection(name);
-  }
-  renderAll();
+function switchView(view){ views.forEach(v=>document.getElementById(v+'View').classList.toggle('active',v===view)); document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===view)); pageTitle.textContent=view.charAt(0).toUpperCase()+view.slice(1); sidebar.classList.remove('open'); }
+async function loadAll(){
+  [state.camions,state.chauffeurs,state.voyages,state.entretien,state.depenses]=await Promise.all([
+    readCol('camions'), readCol('chauffeurs'), readCol('voyages'), readCol('entretien'), readCol('depenses')
+  ]);
+  const p=await getDoc(doc(db,'parametres','general')); state.parametres=p.exists()?p.data():null;
 }
+async function readCol(name){ const qy=query(collection(db,name), orderBy('createdAt','desc')); const snap=await getDocs(qy).catch(()=>getDocs(collection(db,name))); return snap.docs.map(d=>({id:d.id,...d.data()})); }
+function f(list, keys){ if(!state.search) return list; return list.filter(x=>keys.some(k=>contains(x[k], state.search))); }
+function card(title,val,small=''){ return `<div class="card stat"><div class="muted">${title}</div><div class="value">${val}</div>${small?`<div class="muted small">${small}</div>`:''}</div>`; }
+function field(id,label,type='text',cls=''){ return `<label class="${cls}"><span>${label}</span><input id="${id}" type="${type}"></label>`; }
+function num(v){ return Number(v||0); }
 
-async function readCollection(name) {
-  const snap = await getDocs(collection(db, name));
-  return snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .sort((a, b) => getTime(b.updatedAt || b.createdAt) - getTime(a.updatedAt || a.createdAt));
+function renderAll(){ renderDashboard(); renderCamions(); renderChauffeurs(); renderVoyages(); renderEntretien(); renderDepenses(); renderDocuments(); renderParametres(); bindDynamic(); }
+function renderDashboard(){
+ const revenu = state.voyages.reduce((s,v)=>s+num(v.prixCourse)+num(v.prixCourseRetour),0);
+ const coutVoyages = state.voyages.reduce((s,v)=>s+num(v.gasoil)+num(v.fraisMission)+num(v.gasoilRetour)+num(v.fraisMissionRetour),0);
+ const coutEntretien = state.entretien.reduce((s,v)=>s+num(v.cout),0);
+ const coutDepenses = state.depenses.reduce((s,v)=>s+num(v.montant),0);
+ const benefice = revenu-coutVoyages-coutEntretien-coutDepenses;
+ dashboardView.innerHTML=`<div class="stats-grid">${card('Revenu total',money(revenu))}${card('Coût voyages',money(coutVoyages))}${card('Entretien',money(coutEntretien))}${card('Bénéfice estimé',money(benefice))}</div>
+ <div class="grid-2 mt16"><div class="card"><div class="section-title"><h2>Résumé</h2></div><div class="table-list">
+ <div class="item"><div><h4>Camions</h4><p>${state.camions.length} fiche(s)</p></div><span class="badge">Parc</span></div>
+ <div class="item"><div><h4>Chauffeurs</h4><p>${state.chauffeurs.length} fiche(s)</p></div><span class="badge">Équipe</span></div>
+ <div class="item"><div><h4>Voyages</h4><p>${state.voyages.length} fiche(s)</p></div><span class="badge">Transport</span></div>
+ <div class="item"><div><h4>Dépenses</h4><p>${state.entretien.length+state.depenses.length} opération(s)</p></div><span class="badge">Finance</span></div></div></div>
+ <div class="card"><div class="section-title"><h2>Derniers voyages</h2></div><div class="stack">${state.voyages.slice(0,5).map(v=>`<div class="item"><div><h4>${esc(v.client||'-')} → ${esc(v.destination||'-')}</h4><p>${esc(v.nomChauffeur||'-')}</p><p>${fmtDate(v.dateDepart)}</p></div><strong>${money(num(v.prixCourse)+num(v.prixCourseRetour))}</strong></div>`).join('') || '<div class="empty">Aucun voyage</div>'}</div></div></div>`;
 }
+function renderCamions(){ const list=f(state.camions,['numeroCamion','numeroPlaque','marqueModele','numeroRemorque','plaqueRemorque','remarque']); camionsView.innerHTML=`<div class="grid-2"><section class="card"><div class="section-title"><h2>${editing.camions?'Modifier':'Ajouter'} un camion</h2></div><form id="camionForm" class="form-grid">${field('numeroCamion','Numéro de camion')}${field('numeroPlaque','Numéro de plaque')}${field('marqueModele','Marque de camion et modèle')}${field('numeroRemorque','Numéro de remorque')}${field('plaqueRemorque','Plaque de remorque')}<label class="full"><span>Remarque</span><textarea id="remarque"></textarea></label><div class="full actions"><button class="btn primary">${editing.camions?'Mettre à jour':'Enregistrer'}</button>${editing.camions?'<button type="button" id="cancelCamion" class="btn secondary">Annuler</button>':''}</div></form></section><section class="card"><div class="section-title"><h2>Liste des camions</h2><p class="muted">${list.length} résultat(s)</p></div><div class="stack">${list.map(i=>`<div class="item"><div><h4>${esc(i.numeroCamion||'-')} • ${esc(i.marqueModele||'-')}</h4><p>Plaque: ${esc(i.numeroPlaque||'-')}</p><p>Remorque: ${esc(i.numeroRemorque||'-')} • ${esc(i.plaqueRemorque||'-')}</p><p>${esc(i.remarque||'')}</p></div><div class="actions"><button class="btn small secondary edit" data-col="camions" data-id="${i.id}">Modifier</button><button class="btn small danger del" data-col="camions" data-id="${i.id}">Supprimer</button></div></div>`).join('') || '<div class="empty">Aucun camion</div>'}</div></section></div>`; fillCamion(); }
+function fillCamion(){ if(!editing.camions) return; const x=state.camions.find(i=>i.id===editing.camions); if(!x) return; ['numeroCamion','numeroPlaque','marqueModele','numeroRemorque','plaqueRemorque','remarque'].forEach(k=>document.getElementById(k).value=x[k]||''); }
+function renderChauffeurs(){ const list=f(state.chauffeurs,['nom','numeroChauffeur','numeroPermis','adresse','telephone','userId']); chauffeursView.innerHTML=`<div class="grid-2"><section class="card"><div class="section-title"><h2>${editing.chauffeurs?'Modifier':'Ajouter'} un chauffeur</h2></div><form id="chauffeurForm" class="form-grid">${field('userId','UID Firebase du chauffeur')}${field('nom','Nom du chauffeur')}${field('numeroChauffeur','Numéro de chauffeur')}${field('numeroPermis','Numéro de permis')}${field('telephone','Téléphone')}${field('adresse','Adresse','text','full')}<div class="full actions"><button class="btn primary">${editing.chauffeurs?'Mettre à jour':'Enregistrer'}</button>${editing.chauffeurs?'<button type="button" id="cancelChauffeur" class="btn secondary">Annuler</button>':''}</div></form></section><section class="card"><div class="section-title"><h2>Liste des chauffeurs</h2></div><div class="stack">${list.map(i=>`<div class="item"><div><h4>${esc(i.nom||'-')}</h4><p>UID: ${esc(i.userId||'-')}</p><p>Chauffeur: ${esc(i.numeroChauffeur||'-')} • Permis: ${esc(i.numeroPermis||'-')}</p><p>${esc(i.telephone||'-')} • ${esc(i.adresse||'-')}</p></div><div class="actions"><button class="btn small secondary edit" data-col="chauffeurs" data-id="${i.id}">Modifier</button><button class="btn small danger del" data-col="chauffeurs" data-id="${i.id}">Supprimer</button></div></div>`).join('') || '<div class="empty">Aucun chauffeur</div>'}</div></section></div>`; fillChauffeur(); }
+function fillChauffeur(){ if(!editing.chauffeurs) return; const x=state.chauffeurs.find(i=>i.id===editing.chauffeurs); if(!x) return; ['userId','nom','numeroChauffeur','numeroPermis','telephone','adresse'].forEach(k=>document.getElementById(k).value=x[k]||''); }
+function renderVoyages(){ const drivers=state.chauffeurs.map(c=>`<option value="${esc(c.userId)}">${esc(c.nom)} (${esc(c.numeroChauffeur||'')})</option>`).join(''); const trucks=state.camions.map(c=>`<option value="${esc(c.id)}">${esc(c.numeroCamion||c.marqueModele)}</option>`).join(''); const list=f(state.voyages,['client','destination','retourClient','retourDestination','nomChauffeur']); voyagesView.innerHTML=`<div class="grid-2"><section class="card"><div class="section-title"><h2>${editing.voyages?'Modifier':'Ajouter'} un voyage</h2></div><form id="voyageForm" class="form-grid"><label><span>Chauffeur</span><select id="chauffeurId"><option value="">Choisir</option>${drivers}</select></label><label><span>Camion</span><select id="camionId"><option value="">Choisir</option>${trucks}</select></label>${field('client','Client')}${field('destination','Destination')}${field('dateDepart','Date de départ','datetime-local')}${field('dateArrivee','Date d’arrivée','datetime-local')}${field('prixCourse','Prix de course','number')}${field('gasoil','Gasoil aller','number')}${field('fraisMission','Frais de mission aller','number')}${field('auteurDepenses','Auteur dépenses')}${field('retourClient','Client retour')}${field('retourDestination','Destination retour')}${field('dateRetour','Date de retour','datetime-local')}${field('dateRetourArrivee','Date arrivée retour','datetime-local')}${field('prixCourseRetour','Prix de course retour','number')}${field('gasoilRetour','Gasoil retour','number')}${field('fraisMissionRetour','Frais de mission retour','number')}${field('kilometrageApres10Voyages','Kilométrage après chèque 10 voyages','number','full')}<div class="full actions"><button class="btn primary">${editing.voyages?'Mettre à jour':'Enregistrer'}</button>${editing.voyages?'<button type="button" id="cancelVoyage" class="btn secondary">Annuler</button>':''}</div></form></section><section class="card"><div class="section-title"><h2>Liste des voyages</h2></div><div class="stack">${list.map(v=>`<div class="item"><div><h4>${esc(v.client||'-')} → ${esc(v.destination||'-')}</h4><p>Chauffeur: ${esc(v.nomChauffeur||'-')}</p><p>Départ: ${fmtDate(v.dateDepart)} • Arrivée: ${fmtDate(v.dateArrivee)}</p><p>Aller: ${money(v.prixCourse)} • Retour: ${money(v.prixCourseRetour)}</p><p>Gasoil total: ${money(num(v.gasoil)+num(v.gasoilRetour))} • Frais mission: ${money(num(v.fraisMission)+num(v.fraisMissionRetour))}</p></div><div class="actions"><button class="btn small secondary edit" data-col="voyages" data-id="${v.id}">Modifier</button><button class="btn small danger del" data-col="voyages" data-id="${v.id}">Supprimer</button></div></div>`).join('') || '<div class="empty">Aucun voyage</div>'}</div></section></div>`; fillVoyage(); }
+function fillVoyage(){ if(!editing.voyages) return; const x=state.voyages.find(i=>i.id===editing.voyages); if(!x) return; ['chauffeurId','camionId','client','destination','prixCourse','gasoil','fraisMission','auteurDepenses','retourClient','retourDestination','prixCourseRetour','gasoilRetour','fraisMissionRetour','kilometrageApres10Voyages'].forEach(k=>{ const el=document.getElementById(k); if(el) el.value=x[k]||'';}); ['dateDepart','dateArrivee','dateRetour','dateRetourArrivee'].forEach(k=>{ const el=document.getElementById(k); if(el) el.value=dtValue(x[k]);}); }
+function renderEntretien(){ const trucks=state.camions.map(c=>`<option value="${esc(c.id)}">${esc(c.numeroCamion||c.marqueModele)}</option>`).join(''); const list=f(state.entretien,['type','description','garage']); entretienView.innerHTML=`<div class="grid-2"><section class="card"><div class="section-title"><h2>${editing.entretien?'Modifier':'Ajouter'} un entretien</h2></div><form id="entretienForm" class="form-grid"><label><span>Camion</span><select id="entCamionId"><option value="">Choisir</option>${trucks}</select></label><label><span>Type</span><select id="type"><option value="pneus">Pneus</option><option value="vidange">Vidange</option><option value="pieces mecaniques">Pièces mécaniques</option><option value="reparation">Frais de réparation</option><option value="hotel reparation">Hôtel réparation</option></select></label><label class="full"><span>Description</span><textarea id="description"></textarea></label>${field('cout','Coût','number')}${field('date','Date','datetime-local')}${field('garage','Garage / lieu')}<label><span>Remorque</span><select id="remorque"><option value="false">Non</option><option value="true">Oui</option></select></label><div class="full"><label><span>Document / facture</span><input id="entretienFile" type="file"></label></div><div class="full actions"><button class="btn primary">${editing.entretien?'Mettre à jour':'Enregistrer'}</button>${editing.entretien?'<button type="button" id="cancelEntretien" class="btn secondary">Annuler</button>':''}</div></form></section><section class="card"><div class="section-title"><h2>Liste entretien</h2></div><div class="stack">${list.map(v=>`<div class="item"><div><h4>${esc(v.type||'-')}</h4><p>${esc(v.description||'-')}</p><p>${fmtDate(v.date)} • ${money(v.cout)}</p><p>${esc(v.garage||'-')} ${v.fileUrl?`• <a href="${v.fileUrl}" target="_blank">Document</a>`:''}</p></div><div class="actions"><button class="btn small secondary edit" data-col="entretien" data-id="${v.id}">Modifier</button><button class="btn small danger del" data-col="entretien" data-id="${v.id}">Supprimer</button></div></div>`).join('') || '<div class="empty">Aucun entretien</div>'}</div></section></div>`; fillEntretien(); }
+function fillEntretien(){ if(!editing.entretien) return; const x=state.entretien.find(i=>i.id===editing.entretien); if(!x) return; if(entCamionId) entCamionId.value=x.camionId||''; ['type','description','cout','garage'].forEach(k=>document.getElementById(k).value=x[k]||''); date.value=dtValue(x.date); remorque.value=String(!!x.remorque); }
+function renderDepenses(){ const trucks=state.camions.map(c=>`<option value="${esc(c.id)}">${esc(c.numeroCamion||c.marqueModele)}</option>`).join(''); const drivers=state.chauffeurs.map(c=>`<option value="${esc(c.userId)}">${esc(c.nom)}</option>`).join(''); const list=f(state.depenses,['type','description']); depensesView.innerHTML=`<div class="grid-2"><section class="card"><div class="section-title"><h2>${editing.depenses?'Modifier':'Ajouter'} une dépense</h2></div><form id="depenseForm" class="form-grid"><label><span>Type</span><select id="depType"><option value="assurance chauffeur">Assurance chauffeur</option><option value="frais comptable">Frais comptable</option><option value="declaration impots">Déclaration d’impôts</option><option value="salaire chauffeur">Salaire chauffeur</option><option value="assurance camion">Assurance du camion</option><option value="assurance marchandise">Assurance de marchandise</option></select></label>${field('montant','Montant','number')}${field('depDate','Date','datetime-local')}<label><span>Camion lié</span><select id="depCamionId"><option value="">Aucun</option>${trucks}</select></label><label><span>Chauffeur lié</span><select id="depChauffeurId"><option value="">Aucun</option>${drivers}</select></label><label class="full"><span>Description</span><textarea id="depDescription"></textarea></label><div class="full"><label><span>Reçu / document</span><input id="depenseFile" type="file"></label></div><div class="full actions"><button class="btn primary">${editing.depenses?'Mettre à jour':'Enregistrer'}</button>${editing.depenses?'<button type="button" id="cancelDepense" class="btn secondary">Annuler</button>':''}</div></form></section><section class="card"><div class="section-title"><h2>Liste dépenses</h2></div><div class="stack">${list.map(v=>`<div class="item"><div><h4>${esc(v.type||'-')}</h4><p>${esc(v.description||'-')}</p><p>${fmtDate(v.date)} • ${money(v.montant)}</p><p>${v.fileUrl?`<a href="${v.fileUrl}" target="_blank">Document</a>`:''}</p></div><div class="actions"><button class="btn small secondary edit" data-col="depenses" data-id="${v.id}">Modifier</button><button class="btn small danger del" data-col="depenses" data-id="${v.id}">Supprimer</button></div></div>`).join('') || '<div class="empty">Aucune dépense</div>'}</div></section></div>`; fillDepense(); }
+function fillDepense(){ if(!editing.depenses) return; const x=state.depenses.find(i=>i.id===editing.depenses); if(!x) return; depType.value=x.type||''; montant.value=x.montant||''; depDate.value=dtValue(x.date); depCamionId.value=x.camionId||''; depChauffeurId.value=x.chauffeurId||''; depDescription.value=x.description||''; }
+function renderDocuments(){ const tripDocs=state.voyages.filter(v=>v.fileUrl); const entDocs=state.entretien.filter(v=>v.fileUrl); const depDocs=state.depenses.filter(v=>v.fileUrl); documentsView.innerHTML=`<div class="grid-2"><section class="card"><div class="section-title"><h2>Documents voyages</h2></div><div class="stack">${tripDocs.map(v=>`<div class="item"><div><h4>${esc(v.client||'-')}</h4><p>${esc(v.nomChauffeur||'-')}</p></div><a class="btn small secondary" target="_blank" href="${v.fileUrl}">Ouvrir</a></div>`).join('') || '<div class="empty">Aucun document voyage</div>'}</div></section><section class="card"><div class="section-title"><h2>Documents entretien / dépenses</h2></div><div class="stack">${[...entDocs,...depDocs].map(v=>`<div class="item"><div><h4>${esc(v.type||v.client||'-')}</h4><p>${fmtDate(v.date||v.createdAt)}</p></div><a class="btn small secondary" target="_blank" href="${v.fileUrl}">Ouvrir</a></div>`).join('') || '<div class="empty">Aucun document</div>'}</div></section></div>`; }
+function renderParametres(){ const p=state.parametres||{}; parametresView.innerHTML=`<div class="grid-2"><section class="card"><div class="section-title"><h2>Paramètres généraux</h2></div><form id="paramForm" class="form-grid">${field('nomEntreprise','Nom entreprise')}${field('devise','Devise')}${field('telephoneEntreprise','Téléphone')}${field('emailEntreprise','Email')}${field('adresseEntreprise','Adresse','text','full')}<div class="full actions"><button class="btn primary">Enregistrer</button></div></form></section><section class="card"><div class="section-title"><h2>Aide démarrage</h2></div><div class="stack"><div class="item"><div><h4>Collections prévues</h4><p>users, camions, chauffeurs, voyages, entretien, depenses, parametres/general</p></div></div><div class="item"><div><h4>Uploads</h4><p>Documents par voyage, entretien et dépense inclus.</p></div></div><div class="item"><div><h4>Rôles</h4><p>admin = accès total, chauffeur = ses propres voyages.</p></div></div></div></section></div>`; ['nomEntreprise','devise','telephoneEntreprise','emailEntreprise','adresseEntreprise'].forEach(k=>{ const el=document.getElementById(k); if(el) el.value=p[k]||''; }); }
 
-function renderAll() {
-  renderDashboard();
-  renderTrucks();
-  renderDrivers();
-  renderTrips();
-  renderMaintenance();
-  renderExpenses();
-  renderSettings();
-  switchView(state.currentView, false);
+function bindDynamic(){
+  document.getElementById('camionForm')?.addEventListener('submit', saveCamion);
+  document.getElementById('chauffeurForm')?.addEventListener('submit', saveChauffeur);
+  document.getElementById('voyageForm')?.addEventListener('submit', saveVoyage);
+  document.getElementById('entretienForm')?.addEventListener('submit', saveEntretien);
+  document.getElementById('depenseForm')?.addEventListener('submit', saveDepense);
+  document.getElementById('paramForm')?.addEventListener('submit', saveParams);
+  document.querySelectorAll('.edit').forEach(b=>b.addEventListener('click', ()=>{ editing[b.dataset.col]=b.dataset.id; renderAll(); switchView(b.dataset.col==='depenses'?'depenses':b.dataset.col); }));
+  document.querySelectorAll('.del').forEach(b=>b.addEventListener('click', ()=>removeDoc(b.dataset.col,b.dataset.id)));
+  document.getElementById('cancelCamion')?.addEventListener('click',()=>{editing.camions=null; renderCamions(); bindDynamic();});
+  document.getElementById('cancelChauffeur')?.addEventListener('click',()=>{editing.chauffeurs=null; renderChauffeurs(); bindDynamic();});
+  document.getElementById('cancelVoyage')?.addEventListener('click',()=>{editing.voyages=null; renderVoyages(); bindDynamic();});
+  document.getElementById('cancelEntretien')?.addEventListener('click',()=>{editing.entretien=null; renderEntretien(); bindDynamic();});
+  document.getElementById('cancelDepense')?.addEventListener('click',()=>{editing.depenses=null; renderDepenses(); bindDynamic();});
 }
-
-function renderCurrentView() {
-  if (state.currentView === 'dashboard') renderDashboard();
-  if (state.currentView === 'trucks') renderTrucks();
-  if (state.currentView === 'drivers') renderDrivers();
-  if (state.currentView === 'trips') renderTrips();
-  if (state.currentView === 'maintenance') renderMaintenance();
-  if (state.currentView === 'expenses') renderExpenses();
-  if (state.currentView === 'settings') renderSettings();
-}
-
-function switchView(view, rerender = true) {
-  state.currentView = view;
-  Object.keys(viewTitles).forEach((key) => {
-    const el = byId(`${key}View`);
-    if (el) el.classList.toggle('active', key === view);
-  });
-  document.querySelectorAll('[data-view]').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.view === view);
-  });
-  byId('pageTitle').textContent = viewTitles[view];
-  byId('pageTitleMobile').textContent = viewTitles[view];
-  closeMenu();
-  if (rerender) renderCurrentView();
-}
-
-function renderDashboard() {
-  const totalRevenue = state.trips.reduce((sum, item) => sum + num(item.price) + num(item.returnPrice), 0);
-  const tripCosts = state.trips.reduce((sum, item) => sum + num(item.fuel) + num(item.missionFee) + num(item.returnFuel) + num(item.returnMissionFee), 0);
-  const maintenanceCosts = state.maintenance.reduce((sum, item) => sum + num(item.cost), 0);
-  const expenseCosts = state.expenses.reduce((sum, item) => sum + num(item.amount), 0);
-  const totalCosts = tripCosts + maintenanceCosts + expenseCosts;
-  const profit = totalRevenue - totalCosts;
-
-  const recentTrips = state.trips.slice(0, 5);
-  const topDrivers = groupBySum(state.trips, 'driverName', (item) => num(item.price) + num(item.returnPrice));
-  const topTrucks = groupBySum(state.trips, 'truckNumber', (item) => num(item.price) + num(item.returnPrice));
-
-  byId('dashboardView').innerHTML = `
-    <div class="grid stats-grid">
-      ${statCard('Revenu total', money(totalRevenue))}
-      ${statCard('Coûts voyages', money(tripCosts))}
-      ${statCard('Entretien + dépenses', money(maintenanceCosts + expenseCosts))}
-      ${statCard('Bénéfice estimé', money(profit))}
-    </div>
-
-    <div class="grid dashboard-grid" style="margin-top:18px; grid-template-columns: 1.2fr .8fr;">
-      <section class="card">
-        <div class="card-header"><h2>Résumé activité</h2><p class="muted">Vue globale de la gestion des camions.</p></div>
-        <div class="table-like">
-          ${summaryRow('Camions', `${state.trucks.length} camion(s) enregistrés`, 'Flotte')}
-          ${summaryRow('Chauffeurs', `${state.drivers.length} chauffeur(s) enregistrés`, 'Équipe')}
-          ${summaryRow('Voyages', `${state.trips.length} voyage(s) enregistrés`, 'Transport')}
-          ${summaryRow('Entretien', `${state.maintenance.length} opération(s)`, 'Maintenance')}
-          ${summaryRow('Autres dépenses', `${state.expenses.length} ligne(s)`, 'Finance')}
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="card-header"><h2>Répartition rapide</h2><p class="muted">Ce qui génère le plus.</p></div>
-        <div class="list compact-list">
-          <div class="mini-block">
-            <strong>Top chauffeurs</strong>
-            ${topDrivers.length ? topDrivers.slice(0, 3).map(item => `<p>${escapeHtml(item.label)} — ${money(item.total)}</p>`).join('') : '<p class="muted">Aucune donnée</p>'}
-          </div>
-          <div class="mini-block">
-            <strong>Top camions</strong>
-            ${topTrucks.length ? topTrucks.slice(0, 3).map(item => `<p>${escapeHtml(item.label)} — ${money(item.total)}</p>`).join('') : '<p class="muted">Aucune donnée</p>'}
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <section class="card" style="margin-top:18px;">
-      <div class="card-header"><h2>Derniers voyages</h2><p class="muted">Les voyages les plus récents enregistrés.</p></div>
-      <div class="list">
-        ${recentTrips.length ? recentTrips.map(itemTrip).join('') : '<div class="empty">Aucun voyage enregistré</div>'}
-      </div>
-    </section>
-  `;
-}
-
-function renderTrucks() {
-  const current = state.editing.trucks;
-  const list = filterData(state.trucks, ['truckNumber', 'plate', 'brandModel', 'trailerNumber', 'trailerPlate', 'note']);
-
-  byId('trucksView').innerHTML = `
-    <div class="section-space">
-      <section class="card">
-        <div class="card-header between">
-          <div>
-            <h2>${current ? 'Modifier un camion' : 'Ajouter un camion'}</h2>
-            <p class="muted">Informations camion et remorque.</p>
-          </div>
-          ${current ? '<button type="button" id="cancelTruckEdit" class="btn secondary">Annuler</button>' : ''}
-        </div>
-        <form id="truckForm" class="form-grid">
-          ${inputField('truckNumber', 'Numéro de camion', current?.truckNumber)}
-          ${inputField('plate', 'Numéro de plaque', current?.plate)}
-          ${inputField('brandModel', 'Marque et modèle', current?.brandModel)}
-          ${inputField('trailerNumber', 'Numéro de remorque', current?.trailerNumber)}
-          ${inputField('trailerPlate', 'Plaque de remorque', current?.trailerPlate)}
-          ${textAreaField('note', 'Remarque', current?.note, 'full')}
-          <div class="full actions">
-            <button class="btn primary" type="submit">${current ? 'Mettre à jour' : 'Enregistrer'}</button>
-          </div>
-        </form>
-      </section>
-
-      <section class="card">
-        <div class="card-header between"><div><h2>Liste des camions</h2><p class="muted">${list.length} résultat(s)</p></div></div>
-        <div class="list">
-          ${list.length ? list.map(itemTruck).join('') : '<div class="empty">Aucun camion enregistré</div>'}
-        </div>
-      </section>
-    </div>
-  `;
-
-  byId('truckForm').addEventListener('submit', saveTruck);
-  byId('cancelTruckEdit')?.addEventListener('click', () => {
-    state.editing.trucks = null;
-    renderTrucks();
-  });
-  bindCrudButtons('trucks');
-}
-
-function renderDrivers() {
-  const current = state.editing.drivers;
-  const truckOptions = state.trucks.map((truck) => {
-    const label = truck.truckNumber || truck.brandModel || truck.id;
-    return `<option value="${escapeAttr(label)}" ${label === (current?.assignedTruck || '') ? 'selected' : ''}>${escapeHtml(label)}</option>`;
-  }).join('');
-  const list = filterData(state.drivers, ['name', 'driverNumber', 'licenseNumber', 'address', 'phone', 'assignedTruck']);
-
-  byId('driversView').innerHTML = `
-    <div class="section-space">
-      <section class="card">
-        <div class="card-header between">
-          <div>
-            <h2>${current ? 'Modifier un chauffeur' : 'Ajouter un chauffeur'}</h2>
-            <p class="muted">Gestion de la fiche chauffeur.</p>
-          </div>
-          ${current ? '<button type="button" id="cancelDriverEdit" class="btn secondary">Annuler</button>' : ''}
-        </div>
-        <form id="driverForm" class="form-grid">
-          ${inputField('name', 'Nom du chauffeur', current?.name)}
-          ${inputField('driverNumber', 'Numéro de chauffeur', current?.driverNumber)}
-          ${inputField('licenseNumber', 'Numéro de permis', current?.licenseNumber)}
-          ${inputField('phone', 'Numéro / téléphone', current?.phone)}
-          <label>
-            <span>Camion affecté</span>
-            <select id="assignedTruck"><option value="">Aucun</option>${truckOptions}</select>
-          </label>
-          ${inputField('kmCheckpoint', 'Kilométrage après chèque 10 voyages', current?.kmCheckpoint, 'number')}
-          ${inputField('address', 'Adresse', current?.address, 'text', 'full')}
-          <div class="full actions"><button class="btn primary" type="submit">${current ? 'Mettre à jour' : 'Enregistrer'}</button></div>
-        </form>
-      </section>
-
-      <section class="card">
-        <div class="card-header between"><div><h2>Liste des chauffeurs</h2><p class="muted">${list.length} résultat(s)</p></div></div>
-        <div class="list">${list.length ? list.map(itemDriver).join('') : '<div class="empty">Aucun chauffeur enregistré</div>'}</div>
-      </section>
-    </div>
-  `;
-
-  byId('driverForm').addEventListener('submit', saveDriver);
-  byId('cancelDriverEdit')?.addEventListener('click', () => {
-    state.editing.drivers = null;
-    renderDrivers();
-  });
-  bindCrudButtons('drivers');
-}
-
-function renderTrips() {
-  const current = state.editing.trips;
-  const driverOptions = state.drivers.map((driver) => `<option value="${escapeAttr(driver.name || '')}" ${(driver.name || '') === (current?.driverName || '') ? 'selected' : ''}>${escapeHtml(driver.name || '-')}</option>`).join('');
-  const truckOptions = state.trucks.map((truck) => {
-    const label = truck.truckNumber || truck.brandModel || truck.id;
-    return `<option value="${escapeAttr(label)}" ${label === (current?.truckNumber || '') ? 'selected' : ''}>${escapeHtml(label)}</option>`;
-  }).join('');
-  const list = filterData(state.trips, ['client', 'destination', 'driverName', 'truckNumber', 'authorExpense', 'returnClient', 'returnDestination']);
-
-  byId('tripsView').innerHTML = `
-    <div class="section-space">
-      <section class="card">
-        <div class="card-header between">
-          <div>
-            <h2>${current ? 'Modifier un voyage' : 'Ajouter un voyage'}</h2>
-            <p class="muted">Aller, retour, prix, gasoil et frais.</p>
-          </div>
-          ${current ? '<button type="button" id="cancelTripEdit" class="btn secondary">Annuler</button>' : ''}
-        </div>
-        <form id="tripForm" class="form-grid">
-          ${inputField('client', 'Client', current?.client)}
-          ${inputField('destination', 'Destination', current?.destination)}
-          <label><span>Nom du chauffeur</span><select id="driverName"><option value="">Choisir</option>${driverOptions}</select></label>
-          <label><span>Camion</span><select id="truckNumber"><option value="">Choisir</option>${truckOptions}</select></label>
-          ${inputField('departureDate', 'Date de départ', toInputDate(current?.departureDate), 'datetime-local')}
-          ${inputField('arrivalDate', 'Date d’arrivée', toInputDate(current?.arrivalDate), 'datetime-local')}
-          ${inputField('price', 'Prix de course', current?.price, 'number')}
-          ${inputField('fuel', 'Gasoil aller', current?.fuel, 'number')}
-          ${inputField('missionFee', 'Frais de mission aller', current?.missionFee, 'number')}
-          ${inputField('authorExpense', 'Auteur, dépenses', current?.authorExpense)}
-          ${inputField('returnClient', 'Client retour', current?.returnClient)}
-          ${inputField('returnDestination', 'Destination retour', current?.returnDestination)}
-          ${inputField('returnDate', 'Date de retour', toInputDate(current?.returnDate), 'datetime-local')}
-          ${inputField('returnArrivalDate', 'Date arrivée retour', toInputDate(current?.returnArrivalDate), 'datetime-local')}
-          ${inputField('returnPrice', 'Prix course retour', current?.returnPrice, 'number')}
-          ${inputField('returnMissionFee', 'Frais mission retour', current?.returnMissionFee, 'number')}
-          ${inputField('returnFuel', 'Gasoil retour', current?.returnFuel, 'number')}
-          ${inputField('kmAfter10Trips', 'Kilométrage après chèque 10 voyages', current?.kmAfter10Trips, 'number', 'full')}
-          <div class="full actions"><button class="btn primary" type="submit">${current ? 'Mettre à jour' : 'Enregistrer'}</button></div>
-        </form>
-      </section>
-
-      <section class="card">
-        <div class="card-header between"><div><h2>Liste des voyages</h2><p class="muted">${list.length} résultat(s)</p></div></div>
-        <div class="list">${list.length ? list.map(itemTrip).join('') : '<div class="empty">Aucun voyage enregistré</div>'}</div>
-      </section>
-    </div>
-  `;
-
-  byId('tripForm').addEventListener('submit', saveTrip);
-  byId('cancelTripEdit')?.addEventListener('click', () => {
-    state.editing.trips = null;
-    renderTrips();
-  });
-  bindCrudButtons('trips');
-}
-
-function renderMaintenance() {
-  const current = state.editing.maintenance;
-  const truckOptions = state.trucks.map((truck) => {
-    const label = truck.truckNumber || truck.brandModel || truck.id;
-    return `<option value="${escapeAttr(label)}" ${label === (current?.truckNumber || '') ? 'selected' : ''}>${escapeHtml(label)}</option>`;
-  }).join('');
-  const list = filterData(state.maintenance, ['type', 'truckNumber', 'note']);
-
-  byId('maintenanceView').innerHTML = `
-    <div class="section-space">
-      <section class="card">
-        <div class="card-header between">
-          <div>
-            <h2>${current ? 'Modifier un entretien' : 'Ajouter un entretien'}</h2>
-            <p class="muted">Camion et remorque, pneus, vidange, pièces, réparations, hôtel réparation.</p>
-          </div>
-          ${current ? '<button type="button" id="cancelMaintenanceEdit" class="btn secondary">Annuler</button>' : ''}
-        </div>
-        <form id="maintenanceForm" class="form-grid">
-          <label>
-            <span>Type d’entretien</span>
-            <select id="type">
-              ${['Pneus', 'Vidange', 'Pièces mécaniques', 'Frais de réparation', 'Hôtel réparation'].map(type => `<option value="${escapeAttr(type)}" ${type === (current?.type || '') ? 'selected' : ''}>${type}</option>`).join('')}
-            </select>
-          </label>
-          <label><span>Camion</span><select id="truckNumber"><option value="">Choisir</option>${truckOptions}</select></label>
-          ${inputField('cost', 'Frais de réparation / coût', current?.cost, 'number')}
-          ${inputField('date', 'Date', toInputDate(current?.date), 'datetime-local')}
-          ${textAreaField('note', 'Remarque', current?.note, 'full')}
-          <div class="full actions"><button class="btn primary" type="submit">${current ? 'Mettre à jour' : 'Enregistrer'}</button></div>
-        </form>
-      </section>
-
-      <section class="card"><div class="card-header"><h2>Liste entretien</h2></div><div class="list">${list.length ? list.map(itemMaintenance).join('') : '<div class="empty">Aucun entretien enregistré</div>'}</div></section>
-    </div>
-  `;
-
-  byId('maintenanceForm').addEventListener('submit', saveMaintenance);
-  byId('cancelMaintenanceEdit')?.addEventListener('click', () => {
-    state.editing.maintenance = null;
-    renderMaintenance();
-  });
-  bindCrudButtons('maintenance');
-}
-
-function renderExpenses() {
-  const current = state.editing.expenses;
-  const driverOptions = state.drivers.map((driver) => `<option value="${escapeAttr(driver.name || '')}" ${(driver.name || '') === (current?.driverName || '') ? 'selected' : ''}>${escapeHtml(driver.name || '-')}</option>`).join('');
-  const categories = ['Assurance chauffeur', 'Frais comptable', 'Déclaration d’impôts', 'Salaire chauffeur', 'Assurance du camion', 'Assurance de marchandise', 'Autre'];
-  const list = filterData(state.expenses, ['category', 'driverName', 'note']);
-
-  byId('expensesView').innerHTML = `
-    <div class="section-space">
-      <section class="card">
-        <div class="card-header between">
-          <div>
-            <h2>${current ? 'Modifier une dépense' : 'Ajouter une dépense'}</h2>
-            <p class="muted">Assurance, comptable, impôts, salaire et autres coûts.</p>
-          </div>
-          ${current ? '<button type="button" id="cancelExpenseEdit" class="btn secondary">Annuler</button>' : ''}
-        </div>
-        <form id="expenseForm" class="form-grid">
-          <label><span>Catégorie</span><select id="category">${categories.map(cat => `<option value="${escapeAttr(cat)}" ${cat === (current?.category || '') ? 'selected' : ''}>${cat}</option>`).join('')}</select></label>
-          <label><span>Nom du chauffeur</span><select id="driverName"><option value="">Aucun</option>${driverOptions}</select></label>
-          ${inputField('amount', 'Montant', current?.amount, 'number')}
-          ${inputField('date', 'Date', toInputDate(current?.date), 'datetime-local')}
-          ${textAreaField('note', 'Remarque', current?.note, 'full')}
-          <div class="full actions"><button class="btn primary" type="submit">${current ? 'Mettre à jour' : 'Enregistrer'}</button></div>
-        </form>
-      </section>
-
-      <section class="card"><div class="card-header"><h2>Liste dépenses</h2></div><div class="list">${list.length ? list.map(itemExpense).join('') : '<div class="empty">Aucune dépense enregistrée</div>'}</div></section>
-    </div>
-  `;
-
-  byId('expenseForm').addEventListener('submit', saveExpense);
-  byId('cancelExpenseEdit')?.addEventListener('click', () => {
-    state.editing.expenses = null;
-    renderExpenses();
-  });
-  bindCrudButtons('expenses');
-}
-
-function renderSettings() {
-  byId('settingsView').innerHTML = `
-    <section class="card">
-      <div class="card-header"><h2>Réglages du projet</h2><p class="muted">Ce projet fonctionne avec Firebase Auth + Firestore.</p></div>
-      <div class="list">
-        <div class="list-item"><div><h4>Collections utilisées</h4><p>users, trucks, drivers, trips, maintenance, expenses</p></div></div>
-        <div class="list-item"><div><h4>Rôles</h4><p>Dans <strong>users/{uid}</strong>, le champ <strong>role</strong> doit être <strong>admin</strong> ou <strong>chauffeur</strong>.</p></div></div>
-        <div class="list-item"><div><h4>Connexion</h4><p>Active Email/Password dans Firebase Authentication puis crée les comptes.</p></div></div>
-        <div class="list-item"><div><h4>PWA</h4><p>Le manifest et le service worker sont inclus pour installation mobile.</p></div></div>
-      </div>
-    </section>
-  `;
-}
-
-async function saveTruck(event) {
-  event.preventDefault();
-  const payload = {
-    truckNumber: val('truckNumber'),
-    plate: val('plate'),
-    brandModel: val('brandModel'),
-    trailerNumber: val('trailerNumber'),
-    trailerPlate: val('trailerPlate'),
-    note: val('note')
-  };
-  await writeDoc('trucks', payload);
-}
-
-async function saveDriver(event) {
-  event.preventDefault();
-  const payload = {
-    name: val('name'),
-    driverNumber: val('driverNumber'),
-    licenseNumber: val('licenseNumber'),
-    phone: val('phone'),
-    address: val('address'),
-    assignedTruck: val('assignedTruck'),
-    kmCheckpoint: num(val('kmCheckpoint'))
-  };
-  await writeDoc('drivers', payload);
-}
-
-async function saveTrip(event) {
-  event.preventDefault();
-  const payload = {
-    client: val('client'),
-    destination: val('destination'),
-    driverName: val('driverName'),
-    truckNumber: val('truckNumber'),
-    departureDate: val('departureDate'),
-    arrivalDate: val('arrivalDate'),
-    price: num(val('price')),
-    fuel: num(val('fuel')),
-    missionFee: num(val('missionFee')),
-    authorExpense: val('authorExpense'),
-    returnClient: val('returnClient'),
-    returnDestination: val('returnDestination'),
-    returnDate: val('returnDate'),
-    returnArrivalDate: val('returnArrivalDate'),
-    returnPrice: num(val('returnPrice')),
-    returnMissionFee: num(val('returnMissionFee')),
-    returnFuel: num(val('returnFuel')),
-    kmAfter10Trips: num(val('kmAfter10Trips'))
-  };
-
-  const matchedDriver = state.drivers.find((driver) => driver.name === payload.driverName);
-  if (matchedDriver) payload.driverUid = matchedDriver.userUid || matchedDriver.uid || matchedDriver.authUid || '';
-
-  await writeDoc('trips', payload);
-}
-
-async function saveMaintenance(event) {
-  event.preventDefault();
-  const payload = {
-    type: val('type'),
-    truckNumber: val('truckNumber'),
-    cost: num(val('cost')),
-    date: val('date'),
-    note: val('note')
-  };
-  await writeDoc('maintenance', payload);
-}
-
-async function saveExpense(event) {
-  event.preventDefault();
-  const payload = {
-    category: val('category'),
-    driverName: val('driverName'),
-    amount: num(val('amount')),
-    date: val('date'),
-    note: val('note')
-  };
-  await writeDoc('expenses', payload);
-}
-
-async function writeDoc(collectionName, payload) {
-  const current = state.editing[collectionName];
-  if (current?.id) {
-    await updateDoc(doc(db, collectionName, current.id), {
-      ...payload,
-      updatedAt: serverTimestamp()
-    });
-  } else {
-    await addDoc(collection(db, collectionName), {
-      ...payload,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-  }
-
-  state.editing[collectionName] = null;
-  await refreshAll();
-  switchView(collectionName === 'maintenance' ? 'maintenance' : collectionName, false);
-}
-
-function bindCrudButtons(collectionName) {
-  document.querySelectorAll(`[data-edit-col="${collectionName}"]`).forEach((btn) => {
-    btn.addEventListener('click', () => {
-      state.editing[collectionName] = state[collectionName].find((item) => item.id === btn.dataset.id) || null;
-      renderCurrentView();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-  });
-
-  document.querySelectorAll(`[data-delete-col="${collectionName}"]`).forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      if (!confirm('Supprimer cet élément ?')) return;
-      await deleteDoc(doc(db, collectionName, btn.dataset.id));
-      if (state.editing[collectionName]?.id === btn.dataset.id) state.editing[collectionName] = null;
-      await refreshAll();
-      switchView(collectionName === 'maintenance' ? 'maintenance' : collectionName, false);
-    });
-  });
-}
-
-function itemTruck(item) {
-  return cardItem(`
-    <h4>${escapeHtml(item.truckNumber || '-')} • ${escapeHtml(item.brandModel || '-')}</h4>
-    <p><strong>Plaque :</strong> ${escapeHtml(item.plate || '-')}</p>
-    <p><strong>Remorque :</strong> ${escapeHtml(item.trailerNumber || '-')} | <strong>Plaque remorque :</strong> ${escapeHtml(item.trailerPlate || '-')}</p>
-    <p><strong>Remarque :</strong> ${escapeHtml(item.note || '-')}</p>
-  `, 'trucks', item.id);
-}
-
-function itemDriver(item) {
-  return cardItem(`
-    <h4>${escapeHtml(item.name || '-')}</h4>
-    <p><strong>Numéro chauffeur :</strong> ${escapeHtml(item.driverNumber || '-')}</p>
-    <p><strong>Permis :</strong> ${escapeHtml(item.licenseNumber || '-')}</p>
-    <p><strong>Téléphone :</strong> ${escapeHtml(item.phone || '-')}</p>
-    <p><strong>Adresse :</strong> ${escapeHtml(item.address || '-')}</p>
-    <p><strong>Camion affecté :</strong> ${escapeHtml(item.assignedTruck || '-')}</p>
-    <p><strong>Kilométrage après chèque 10 voyages :</strong> ${escapeHtml(item.kmCheckpoint || '-')}</p>
-  `, 'drivers', item.id);
-}
-
-function itemTrip(item) {
-  const revenue = num(item.price) + num(item.returnPrice);
-  const costs = num(item.fuel) + num(item.missionFee) + num(item.returnFuel) + num(item.returnMissionFee);
-  return cardItem(`
-    <h4>${escapeHtml(item.client || '-')} → ${escapeHtml(item.destination || '-')}</h4>
-    <p><strong>Chauffeur :</strong> ${escapeHtml(item.driverName || '-')} | <strong>Camion :</strong> ${escapeHtml(item.truckNumber || '-')}</p>
-    <p><strong>Départ :</strong> ${fmtDate(item.departureDate)} | <strong>Arrivée :</strong> ${fmtDate(item.arrivalDate)}</p>
-    <p><strong>Prix aller :</strong> ${money(item.price)} | <strong>Gasoil aller :</strong> ${money(item.fuel)} | <strong>Frais mission aller :</strong> ${money(item.missionFee)}</p>
-    <p><strong>Auteur dépenses :</strong> ${escapeHtml(item.authorExpense || '-')}</p>
-    <p><strong>Retour :</strong> ${escapeHtml(item.returnClient || '-')} → ${escapeHtml(item.returnDestination || '-')}</p>
-    <p><strong>Date retour :</strong> ${fmtDate(item.returnDate)} | <strong>Arrivée retour :</strong> ${fmtDate(item.returnArrivalDate)}</p>
-    <p><strong>Prix retour :</strong> ${money(item.returnPrice)} | <strong>Gasoil retour :</strong> ${money(item.returnFuel)} | <strong>Frais mission retour :</strong> ${money(item.returnMissionFee)}</p>
-    <p><strong>Kilométrage après chèque 10 voyages :</strong> ${escapeHtml(item.kmAfter10Trips || '-')}</p>
-    <p><strong>Total revenu :</strong> ${money(revenue)} | <strong>Total coûts :</strong> ${money(costs)}</p>
-  `, 'trips', item.id);
-}
-
-function itemMaintenance(item) {
-  return cardItem(`
-    <h4>${escapeHtml(item.type || '-')}</h4>
-    <p><strong>Camion :</strong> ${escapeHtml(item.truckNumber || '-')}</p>
-    <p><strong>Date :</strong> ${fmtDate(item.date)}</p>
-    <p><strong>Coût :</strong> ${money(item.cost)}</p>
-    <p><strong>Remarque :</strong> ${escapeHtml(item.note || '-')}</p>
-  `, 'maintenance', item.id);
-}
-
-function itemExpense(item) {
-  return cardItem(`
-    <h4>${escapeHtml(item.category || '-')}</h4>
-    <p><strong>Chauffeur :</strong> ${escapeHtml(item.driverName || '-')}</p>
-    <p><strong>Date :</strong> ${fmtDate(item.date)}</p>
-    <p><strong>Montant :</strong> ${money(item.amount)}</p>
-    <p><strong>Remarque :</strong> ${escapeHtml(item.note || '-')}</p>
-  `, 'expenses', item.id);
-}
-
-function cardItem(content, collectionName, id) {
-  return `
-    <div class="list-item">
-      <div>${content}</div>
-      <div class="actions">
-        <button type="button" class="btn secondary" data-edit-col="${collectionName}" data-id="${id}">Modifier</button>
-        <button type="button" class="btn danger" data-delete-col="${collectionName}" data-id="${id}">Supprimer</button>
-      </div>
-    </div>
-  `;
-}
-
-function statCard(title, value) {
-  return `<div class="card stat-card"><h3>${title}</h3><div class="value">${value}</div></div>`;
-}
-
-function summaryRow(title, text, badge) {
-  return `<div class="list-item"><div><strong>${title}</strong><p>${text}</p></div><span class="badge">${badge}</span></div>`;
-}
-
-function inputField(id, label, value = '', type = 'text', klass = '') {
-  return `<label class="${klass}"><span>${label}</span><input id="${id}" type="${type}" value="${escapeAttr(value ?? '')}" /></label>`;
-}
-
-function textAreaField(id, label, value = '', klass = '') {
-  return `<label class="${klass}"><span>${label}</span><textarea id="${id}">${escapeHtml(value ?? '')}</textarea></label>`;
-}
-
-function filterData(data, keys) {
-  if (!state.search) return data;
-  return data.filter((item) => keys.some((key) => slugContains(item[key], state.search)));
-}
-
-function groupBySum(items, labelKey, sumFn) {
-  const map = new Map();
-  items.forEach((item) => {
-    const label = item[labelKey] || 'Non défini';
-    map.set(label, (map.get(label) || 0) + sumFn(item));
-  });
-  return [...map.entries()].map(([label, total]) => ({ label, total })).sort((a, b) => b.total - a.total);
-}
-
-function toInputDate(value) {
-  if (!value) return '';
-  const date = typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function getTime(value) {
-  if (!value) return 0;
-  if (typeof value?.toDate === 'function') return value.toDate().getTime();
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
-}
-
-function openMenu() {
-  byId('sidebar').classList.add('open');
-  byId('menuOverlay').classList.add('show');
-  document.body.style.overflow = 'hidden';
-}
-
-function closeMenu() {
-  byId('sidebar').classList.remove('open');
-  byId('menuOverlay').classList.remove('show');
-  document.body.style.overflow = '';
-}
-
-function num(value) {
-  return Number(value || 0);
-}
-
-function val(id) {
-  return byId(id)?.value?.trim?.() ?? byId(id)?.value ?? '';
-}
-
-function byId(id) {
-  return document.getElementById(id);
-}
-
-function escapeHtml(value = '') {
-  return String(value).replace(/[&<>"']/g, (s) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
-}
-
-function escapeAttr(value = '') {
-  return escapeHtml(value).replace(/`/g, '&#96;');
-}
+async function saveCamion(e){ e.preventDefault(); const payload={numeroCamion:numeroCamion.value.trim(),numeroPlaque:numeroPlaque.value.trim(),marqueModele:marqueModele.value.trim(),numeroRemorque:numeroRemorque.value.trim(),plaqueRemorque:plaqueRemorque.value.trim(),remarque:remarque.value.trim(),updatedAt:serverTimestamp()}; if(editing.camions){ await updateDoc(doc(db,'camions',editing.camions),payload); editing.camions=null; } else { payload.createdAt=serverTimestamp(); await addDoc(collection(db,'camions'),payload);} await loadAll(); renderAll(); }
+async function saveChauffeur(e){ e.preventDefault(); const payload={userId:userId.value.trim(),nom:nom.value.trim(),numeroChauffeur:numeroChauffeur.value.trim(),numeroPermis:numeroPermis.value.trim(),telephone:telephone.value.trim(),adresse:adresse.value.trim(),updatedAt:serverTimestamp()}; if(editing.chauffeurs){ await updateDoc(doc(db,'chauffeurs',editing.chauffeurs),payload); editing.chauffeurs=null; } else { payload.createdAt=serverTimestamp(); await addDoc(collection(db,'chauffeurs'),payload);} await loadAll(); renderAll(); }
+async function saveVoyage(e){ e.preventDefault(); const driver=state.chauffeurs.find(c=>c.userId===chauffeurId.value) || {}; const payload={chauffeurId:chauffeurId.value,nomChauffeur:driver.nom||'',camionId:camionId.value,client:client.value.trim(),destination:destination.value.trim(),dateDepart:dateDepart.value?new Date(dateDepart.value):null,dateArrivee:dateArrivee.value?new Date(dateArrivee.value):null,prixCourse:num(prixCourse.value),gasoil:num(gasoil.value),fraisMission:num(fraisMission.value),auteurDepenses:auteurDepenses.value.trim(),retourClient:retourClient.value.trim(),retourDestination:retourDestination.value.trim(),dateRetour:dateRetour.value?new Date(dateRetour.value):null,dateRetourArrivee:dateRetourArrivee.value?new Date(dateRetourArrivee.value):null,prixCourseRetour:num(prixCourseRetour.value),gasoilRetour:num(gasoilRetour.value),fraisMissionRetour:num(fraisMissionRetour.value),kilometrageApres10Voyages:num(kilometrageApres10Voyages.value),updatedAt:serverTimestamp()}; if(editing.voyages){ await updateDoc(doc(db,'voyages',editing.voyages),payload); editing.voyages=null; } else { payload.createdBy=state.me.uid; payload.createdAt=serverTimestamp(); await addDoc(collection(db,'voyages'),payload);} await loadAll(); renderAll(); }
+async function saveEntretien(e){ e.preventDefault(); let fileUrl=state.entretien.find(x=>x.id===editing.entretien)?.fileUrl || ''; if(entretienFile.files[0]){ const path=`entretien/${editing.entretien||Date.now()}/${entretienFile.files[0].name}`; const snap=await uploadBytes(ref(storage,path),entretienFile.files[0]); fileUrl=await getDownloadURL(snap.ref);} const payload={camionId:entCamionId.value,type:type.value,description:description.value.trim(),cout:num(cout.value),date:date.value?new Date(date.value):null,garage:garage.value.trim(),remorque:remorque.value==='true',fileUrl,updatedAt:serverTimestamp()}; if(editing.entretien){ await updateDoc(doc(db,'entretien',editing.entretien),payload); editing.entretien=null; } else { payload.createdAt=serverTimestamp(); await addDoc(collection(db,'entretien'),payload);} await loadAll(); renderAll(); }
+async function saveDepense(e){ e.preventDefault(); let fileUrl=state.depenses.find(x=>x.id===editing.depenses)?.fileUrl || ''; if(depenseFile.files[0]){ const path=`depenses/${editing.depenses||Date.now()}/${depenseFile.files[0].name}`; const snap=await uploadBytes(ref(storage,path),depenseFile.files[0]); fileUrl=await getDownloadURL(snap.ref);} const payload={type:depType.value,montant:num(montant.value),description:depDescription.value.trim(),date:depDate.value?new Date(depDate.value):null,camionId:depCamionId.value,chauffeurId:depChauffeurId.value,fileUrl,updatedAt:serverTimestamp()}; if(editing.depenses){ await updateDoc(doc(db,'depenses',editing.depenses),payload); editing.depenses=null; } else { payload.createdAt=serverTimestamp(); await addDoc(collection(db,'depenses'),payload);} await loadAll(); renderAll(); }
+async function saveParams(e){ e.preventDefault(); await setDoc(doc(db,'parametres','general'),{nomEntreprise:nomEntreprise.value.trim(),devise:devise.value.trim()||'CAD',telephoneEntreprise:telephoneEntreprise.value.trim(),emailEntreprise:emailEntreprise.value.trim(),adresseEntreprise:adresseEntreprise.value.trim(),updatedAt:serverTimestamp()},{merge:true}); await loadAll(); renderParametres(); alert('Paramètres enregistrés'); }
+async function removeDoc(col,id){ if(!confirm('Supprimer cet élément ?')) return; await deleteDoc(doc(db,col,id)); await loadAll(); renderAll(); }

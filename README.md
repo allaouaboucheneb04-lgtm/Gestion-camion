@@ -1,30 +1,24 @@
 # Gestion Camion Pro
 
-Projet web Firebase pour la gestion d’une entreprise de camions.
+Projet web Firebase pour gérer :
+- camions
+- chauffeurs
+- voyages aller / retour
+- entretien
+- autres dépenses
+- documents / factures
+- espace admin
+- espace chauffeur
+- PWA installable
 
-## Ce que fait le projet
-- connexion par email / mot de passe
-- rôles `admin` et `chauffeur`
-- dashboard admin avec indicateurs
-- gestion des camions
-- gestion des chauffeurs
-- gestion des voyages aller / retour
-- gestion de l’entretien camion / remorque
-- gestion des autres dépenses
-- espace chauffeur avec ses propres voyages
-- PWA installable sur mobile
+## 1. Config Firebase
+Dans `js/firebase.js`, remplace les valeurs par ton vrai projet Firebase.
 
-## Structure Firestore
-Collections utilisées :
-- `users`
-- `trucks`
-- `drivers`
-- `trips`
-- `maintenance`
-- `expenses`
+## 2. Active Auth
+Firebase Authentication > Sign-in method > Email/Password.
 
-## Exemple document utilisateur
-Document : `users/{uid}`
+## 3. Crée les rôles
+Après avoir créé un utilisateur dans Auth, crée aussi un document dans `users/{uid}`.
 
 ### Admin
 ```json
@@ -44,66 +38,24 @@ Document : `users/{uid}`
 }
 ```
 
-## Déploiement
-1. Créer un projet Firebase
-2. Activer **Authentication > Email/Password**
-3. Créer **Firestore Database**
-4. Coller les clés Firebase dans `js/firebase.js`
-5. Déployer les règles depuis `firestore.rules`
-6. Héberger le dossier sur Netlify, GitHub Pages ou Firebase Hosting
+## 4. Collections utilisées
+- `users`
+- `camions`
+- `chauffeurs`
+- `voyages`
+- `entretien`
+- `depenses`
+- `parametres/general`
 
-## Important
-- l’admin peut ajouter / modifier / supprimer partout
-- le chauffeur peut voir, ajouter, modifier et supprimer **ses propres voyages uniquement**
-- si tu veux relier un chauffeur à un camion, utilise le champ `assignedTruck` dans la collection `drivers`
-- si tu veux relier une fiche chauffeur à un compte Auth précis, tu peux ajouter un champ `userUid` dans `drivers`
+## 5. Règles
+- Firestore: `firestore.rules`
+- Storage: `storage.rules`
 
-## Champs métier intégrés
-### Camion
-- numéro de camion
-- numéro de plaque
-- marque et modèle
-- remarque
-- numéro de remorque
-- plaque de remorque
+## 6. Déploiement
+Tu peux héberger sur Firebase Hosting, Netlify ou GitHub Pages.
+Pour GitHub Pages, garde Firebase comme backend et publie les fichiers du dossier.
 
-### Voyage
-- client
-- destination
-- date de départ
-- date d’arrivée
-- prix de course
-- gasoil
-- frais de mission
-- auteur des dépenses
-
-### Voyage retour
-- client retour
-- destination retour
-- date de retour
-- date d’arrivée retour
-- prix retour
-- frais de mission retour
-- gasoil retour
-
-### Chauffeur
-- nom du chauffeur
-- numéro du chauffeur
-- numéro de permis
-- adresse
-- kilométrage après chèque 10 voyages
-
-### Entretien camion et remorque
-- pneus
-- vidange
-- pièces mécaniques
-- frais de réparation
-- hôtel réparation
-
-### Autres dépenses
-- assurance chauffeur
-- frais comptable
-- déclaration d’impôts
-- salaire chauffeur
-- assurance du camion
-- assurance de marchandise
+## 7. Important
+- Le chauffeur voit seulement ses voyages.
+- L'admin peut tout gérer.
+- Les documents peuvent être joints aux voyages, entretiens et dépenses.

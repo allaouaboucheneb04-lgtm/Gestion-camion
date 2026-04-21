@@ -1,64 +1,30 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function userExists() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function myRole() { return userExists() ? userDoc().data.role : null; }
+    function isAdmin() { return signedIn() && myRole() == 'admin'; }
+    function isDriver() { return signedIn() && myRole() == 'chauffeur'; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
 
-    function signedIn() {
-      return request.auth != null;
+    match /users/{userId} {
+      allow read: if isAdmin() || isSelf(userId);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isSelf(userId) && request.resource.data.role == resource.data.role);
     }
 
-    function myUser() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    match /camions/{id} { allow read: if signedIn(); allow create, update, delete: if isAdmin(); }
+    match /chauffeurs/{id} { allow read: if isAdmin() || (isDriver() && resource.data.userId == request.auth.uid); allow create, update, delete: if isAdmin(); }
+    match /voyages/{id} {
+      allow read: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
+      allow create: if isAdmin() || (isDriver() && request.resource.data.chauffeurId == request.auth.uid);
+      allow update: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid && request.resource.data.chauffeurId == request.auth.uid && request.resource.data.createdBy == resource.data.createdBy);
+      allow delete: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
     }
-
-    function isAdmin() {
-      return signedIn() && myUser().data.role == 'admin';
-    }
-
-    function isDriver() {
-      return signedIn() && myUser().data.role == 'chauffeur';
-    }
-
-    function isOwnTripCreate() {
-      return isDriver() && request.resource.data.driverUid == request.auth.uid;
-    }
-
-    function isOwnTripUpdate() {
-      return isDriver()
-        && resource.data.driverUid == request.auth.uid
-        && request.resource.data.driverUid == request.auth.uid;
-    }
-
-    match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow create: if isAdmin();
-      allow update, delete: if isAdmin();
-    }
-
-    match /trucks/{id} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
-    }
-
-    match /drivers/{id} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
-    }
-
-    match /trips/{id} {
-      allow read: if signedIn() && (isAdmin() || resource.data.driverUid == request.auth.uid);
-      allow create: if signedIn() && (isAdmin() || isOwnTripCreate());
-      allow update: if signedIn() && (isAdmin() || isOwnTripUpdate());
-      allow delete: if signedIn() && (isAdmin() || (isDriver() && resource.data.driverUid == request.auth.uid));
-    }
-
-    match /maintenance/{id} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
-    }
-
-    match /expenses/{id} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
-    }
+    match /entretien/{id} { allow read: if signedIn(); allow create, update, delete: if isAdmin(); }
+    match /depenses/{id} { allow read: if signedIn(); allow create, update, delete: if isAdmin(); }
+    match /parametres/{id} { allow read: if signedIn(); allow create, update: if isAdmin(); allow delete: if false; }
   }
 }
