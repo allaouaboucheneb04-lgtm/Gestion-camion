@@ -1,1 +1,46 @@
-<h1>Espace Chauffeur</h1>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chauffeur - Gestion Camion</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <div class="app-shell compact-shell">
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>Mon espace chauffeur</h1>
+          <p class="muted" id="driverWelcome">Chargement...</p>
+        </div>
+        <button id="logoutBtn" class="btn danger">Déconnexion</button>
+      </header>
+
+      <section class="grid stats-grid" id="driverStats"></section>
+
+      <section class="card">
+        <div class="card-header between">
+          <div>
+            <h2>Ajouter un voyage</h2>
+            <p class="muted">Le chauffeur peut ajouter ses voyages et dépenses autorisées.</p>
+          </div>
+        </div>
+        <form id="driverTripForm" class="form-grid"></form>
+      </section>
+
+      <section class="card">
+        <div class="card-header between">
+          <div>
+            <h2>Mes voyages</h2>
+            <p class="muted">Historique lié à votre compte.</p>
+          </div>
+        </div>
+        <div id="driverTripList" class="list"></div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="../js/chauffeur.js"></script>
+</body>
+</html>

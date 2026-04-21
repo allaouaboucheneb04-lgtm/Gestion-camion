@@ -1,1 +1,56 @@
-<h1>Dashboard Admin PRO MAX</h1>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - Gestion Camion</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-top">
+        <div class="brand-row"><span class="brand-badge">GC</span><div><strong>Gestion Camion</strong><small>Admin</small></div></div>
+        <button id="closeSidebar" class="icon-btn mobile-only">✕</button>
+      </div>
+      <nav class="menu">
+        <button class="menu-item active" data-view="dashboard">Dashboard</button>
+        <button class="menu-item" data-view="trucks">Camions</button>
+        <button class="menu-item" data-view="drivers">Chauffeurs</button>
+        <button class="menu-item" data-view="trips">Voyages</button>
+        <button class="menu-item" data-view="maintenance">Entretien</button>
+        <button class="menu-item" data-view="expenses">Dépenses</button>
+        <button class="menu-item" data-view="settings">Réglages</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <button id="logoutBtn" class="btn danger w-full">Déconnexion</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="left-topbar">
+          <button id="openSidebar" class="icon-btn mobile-only">☰</button>
+          <div>
+            <h1 id="pageTitle">Dashboard</h1>
+            <p class="muted" id="welcomeText">Chargement...</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <input id="globalSearch" class="search" placeholder="Recherche rapide..." />
+        </div>
+      </header>
+
+      <section id="dashboardView" class="view active"></section>
+      <section id="trucksView" class="view"></section>
+      <section id="driversView" class="view"></section>
+      <section id="tripsView" class="view"></section>
+      <section id="maintenanceView" class="view"></section>
+      <section id="expensesView" class="view"></section>
+      <section id="settingsView" class="view"></section>
+    </main>
+  </div>
+
+  <script type="module" src="../js/admin.js"></script>
+</body>
+</html>

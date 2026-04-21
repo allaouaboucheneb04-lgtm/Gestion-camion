@@ -1,35 +1,11 @@
-const CACHE_NAME = 'camion-pro-v1';
+const CACHE = 'gc-promax2-v1';
 const ASSETS = [
   './',
   './index.html',
-  './admin.html',
-  './chauffeur.html',
   './css/style.css',
-  './js/common.js',
-  './js/auth.js',
-  './js/admin.js',
-  './js/chauffeur.js',
-  './js/modals.js',
-  './js/translations.js',
-  './manifest.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png'
+  './js/login.js',
+  './js/firebase.js',
+  './js/i18n.js'
 ];
-
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
-  );
-  self.clients.claim();
-});
-
-self.addEventListener('fetch', e => {
-  e.respondWith(
-    caches.match(e.request).then(res => res || fetch(e.request).catch(() => caches.match('./index.html')))
-  );
-});
+self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS))));
+self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));

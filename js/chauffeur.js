@@ -1,63 +1,88 @@
-requireAuth('chauffeur');
-bindLogout();
+import { auth, db } from './firebase.js';
+import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { collection, addDoc, getDocs, query, where, serverTimestamp, doc, getDoc, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { money, fmtDate } from './helpers.js';
 
-window.addEventListener('app:user-ready', initDriver);
+let me = null;
+let trips = [];
 
-async function initDriver() {
-  renderProfile();
-  await loadMyTrips();
-}
-
-function renderProfile() {
-  const box = document.getElementById('profileBox');
-  const u = window.currentUser || {};
-  box.innerHTML = `
-    <div class="profile-row"><span>Nom</span><strong>${escapeHtml(u.name || '-')}</strong></div>
-    <div class="profile-row"><span>Email</span><strong>${escapeHtml(u.email || '-')}</strong></div>
-    <div class="profile-row"><span>Numéro chauffeur</span><strong>${escapeHtml(u.driverNumber || '-')}</strong></div>
-    <div class="profile-row"><span>Adresse</span><strong>${escapeHtml(u.address || '-')}</strong></div>
-  `;
-}
-
-const form = document.getElementById('voyageForm');
-form?.addEventListener('submit', async e => {
-  e.preventDefault();
-  const data = {
-    client: document.getElementById('client').value,
-    destination: document.getElementById('destination').value,
-    dateDepart: document.getElementById('dateDepart').value,
-    dateArrivee: document.getElementById('dateArrivee').value,
-    prixCourse: Number(document.getElementById('prixCourse').value || 0),
-    gasoil: Number(document.getElementById('gasoil').value || 0),
-    fraisMission: Number(document.getElementById('fraisMission').value || 0),
-    kilometrage: Number(document.getElementById('kilometrage').value || 0),
-    chauffeurUid: window.currentUser.uid,
-    chauffeurNom: window.currentUser.name || '',
-    createdBy: window.currentUser.uid,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  };
-  try {
-    await db.collection('voyages').add(data);
-    form.reset();
-    await loadMyTrips();
-    alert('Voyage enregistré.');
-  } catch (err) {
-    alert(err.message || 'Erreur');
-  }
+onAuthStateChanged(auth, async user => {
+  if (!user) return window.location.href = '../index.html';
+  const snap = await getDoc(doc(db, 'users', user.uid));
+  if (!snap.exists()) return signOut(auth).then(() => window.location.href = '../index.html');
+  me = { uid: user.uid, ...snap.data() };
+  if (me.role !== 'chauffeur') return window.location.href = './admin.html';
+  document.getElementById('driverWelcome').textContent = `Bienvenue ${me.name || me.email || 'Chauffeur'}`;
+  renderForm();
+  await loadTrips();
+  renderStats();
+  renderTrips();
+  document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth).then(() => window.location.href = '../index.html'));
 });
 
-async function loadMyTrips() {
-  const snap = await db.collection('voyages').where('createdBy', '==', window.currentUser.uid).get();
-  const trips = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  document.getElementById('myTripsCount').textContent = trips.length;
-  document.getElementById('myTripRevenue').textContent = formatMoney(trips.reduce((s, t) => s + Number(t.prixCourse || 0), 0));
-  const tbody = document.getElementById('myTripsTable');
-  tbody.innerHTML = trips.length ? trips.map(t => `<tr><td>${escapeHtml(t.client)}</td><td>${escapeHtml(t.destination)}</td><td>${formatMoney(t.prixCourse)}</td><td>${formatDate(t.dateDepart)}</td><td><button class="btn small danger" onclick="deleteMyTrip('${t.id}')">Supprimer</button></td></tr>`).join('') : `<tr><td colspan="5" class="empty-state">Aucun voyage</td></tr>`;
+function renderForm() {
+  document.getElementById('driverTripForm').innerHTML = `
+    <label><span>Client</span><input id="client" /></label>
+    <label><span>Destination</span><input id="destination" /></label>
+    <label><span>Date départ</span><input id="departureDate" type="datetime-local" /></label>
+    <label><span>Date arrivée</span><input id="arrivalDate" type="datetime-local" /></label>
+    <label><span>Prix course</span><input id="price" type="number" /></label>
+    <label><span>Gasoil</span><input id="fuel" type="number" /></label>
+    <label><span>Frais mission</span><input id="missionFee" type="number" /></label>
+    <label><span>Camion</span><input id="truckNumber" /></label>
+    <div class="full"><button class="btn primary">Enregistrer</button></div>
+  `;
+  document.getElementById('driverTripForm').addEventListener('submit', saveTrip);
 }
 
-async function deleteMyTrip(id) {
-  if (!confirm('Supprimer ce voyage ?')) return;
-  await db.collection('voyages').doc(id).delete();
-  loadMyTrips();
+async function saveTrip(e) {
+  e.preventDefault();
+  const payload = {
+    client: val('client'),
+    destination: val('destination'),
+    departureDate: val('departureDate'),
+    arrivalDate: val('arrivalDate'),
+    price: Number(val('price') || 0),
+    fuel: Number(val('fuel') || 0),
+    missionFee: Number(val('missionFee') || 0),
+    truckNumber: val('truckNumber'),
+    driverName: me.name || me.email,
+    driverUid: me.uid,
+    createdAt: serverTimestamp()
+  };
+  await addDoc(collection(db, 'trips'), payload);
+  e.target.reset();
+  await loadTrips();
+  renderStats();
+  renderTrips();
 }
-window.deleteMyTrip = deleteMyTrip;
+
+async function loadTrips() {
+  const snap = await getDocs(query(collection(db, 'trips'), where('driverUid', '==', me.uid)));
+  trips = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+function renderStats() {
+  const revenue = trips.reduce((s, i) => s + Number(i.price || 0), 0);
+  const costs = trips.reduce((s, i) => s + Number(i.fuel || 0) + Number(i.missionFee || 0), 0);
+  document.getElementById('driverStats').innerHTML = `
+    <div class="card stat-card"><h3>Mes voyages</h3><div class="value">${trips.length}</div></div>
+    <div class="card stat-card"><h3>Mon revenu</h3><div class="value">${money(revenue)}</div></div>
+    <div class="card stat-card"><h3>Mes coûts</h3><div class="value">${money(costs)}</div></div>
+    <div class="card stat-card"><h3>Net estimé</h3><div class="value">${money(revenue - costs)}</div></div>`;
+}
+
+function renderTrips() {
+  document.getElementById('driverTripList').innerHTML = trips.map(t => `
+    <div class="list-item">
+      <div>
+        <h4>${escapeHtml(t.client || '-')} → ${escapeHtml(t.destination || '-')}</h4>
+        <p>${fmtDate(t.departureDate)} | Camion: ${escapeHtml(t.truckNumber || '-')}</p>
+        <p>Prix: ${money(t.price)} | Gasoil: ${money(t.fuel)} | Frais mission: ${money(t.missionFee)}</p>
+      </div>
+    </div>
+  `).join('') || '<div class="empty">Aucun voyage pour le moment</div>';
+}
+
+function val(id){ return document.getElementById(id).value; }
+function escapeHtml(v='') { return String(v).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }

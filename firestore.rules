@@ -14,37 +14,40 @@ service cloud.firestore {
       return signedIn() && myUser().data.role == 'admin';
     }
 
-    function isChauffeur() {
+    function isDriver() {
       return signedIn() && myUser().data.role == 'chauffeur';
     }
 
-    match /users/{userId} {
-      allow read: if signedIn();
-      allow write: if isAdmin() || (signedIn() && request.auth.uid == userId);
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if isAdmin();
     }
 
-    match /camions/{docId} {
+    match /trucks/{id} {
       allow read: if signedIn();
       allow write: if isAdmin();
     }
 
-    match /chauffeurs/{docId} {
+    match /drivers/{id} {
       allow read: if signedIn();
       allow write: if isAdmin();
     }
 
-    match /voyages/{docId} {
-      allow read: if isAdmin() || (isChauffeur() && resource.data.createdBy == request.auth.uid);
-      allow create: if isAdmin() || isChauffeur();
-      allow update, delete: if isAdmin() || (isChauffeur() && resource.data.createdBy == request.auth.uid);
+    match /trips/{id} {
+      allow read: if signedIn() && (isAdmin() || resource.data.driverUid == request.auth.uid);
+      allow create: if signedIn() && (
+        isAdmin() ||
+        (isDriver() && request.resource.data.driverUid == request.auth.uid)
+      );
+      allow update, delete: if isAdmin();
     }
 
-    match /entretiens/{docId} {
+    match /maintenance/{id} {
       allow read: if signedIn();
       allow write: if isAdmin();
     }
 
-    match /depenses/{docId} {
+    match /expenses/{id} {
       allow read: if signedIn();
       allow write: if isAdmin();
     }
