@@ -26,12 +26,14 @@ import {
   uploadBytes,
   getDownloadURL
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+const functions = getFunctions(app);
 
 function withTimestamp(data, isUpdate = false) {
   return {
@@ -100,6 +102,13 @@ export async function listWhere(colName, field, op, value, orderField = "created
   const q = query(collection(db, colName), where(field, op, value));
   const snap = await getDocs(q);
   return sortRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })), orderField);
+}
+
+
+export async function inviteDriverAccount(data) {
+  const callInviteDriver = httpsCallable(functions, "inviteDriver");
+  const result = await callInviteDriver(data);
+  return result.data;
 }
 
 // Business helpers

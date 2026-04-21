@@ -1,6 +1,7 @@
 import {
   addCamion, updateCamion, deleteCamion, getCamions,
   addChauffeur, updateChauffeur, deleteChauffeur, getChauffeurs,
+  inviteDriverAccount,
   addVoyage, updateVoyage, deleteVoyage, getVoyages,
   addEntretien, updateEntretien, deleteEntretien, getEntretiens,
   addDepense, updateDepense, deleteDepense, getDepenses,
@@ -105,9 +106,9 @@ function camionsListHtml() {
 function chauffeursHtml() {
   return `
     <div class="card">
-      <div class="card-header"><div><h2>Ajouter un chauffeur</h2><p class="muted">Créer la fiche métier du chauffeur</p></div></div>
+      <div class="card-header"><div><h2>Ajouter un chauffeur</h2><p class="muted">Créer le compte chauffeur et envoyer une invitation email</p></div></div>
       <form id="chauffeurForm" class="form-grid">
-        <label><span>UID Firebase</span><input name="userId" required></label>
+        <label><span>Email du chauffeur</span><input name="email" type="email" required></label>
         <label><span>Nom du chauffeur</span><input name="nom" required></label>
         <label><span>Numéro de chauffeur</span><input name="numeroChauffeur"></label>
         <label><span>Numéro de permis</span><input name="numeroPermis"></label>
@@ -126,6 +127,8 @@ function chauffeursHtml() {
           <div class="item-card">
             <h4>${escapeHtml(c.nom || "-")}</h4>
             <p>UID : ${escapeHtml(c.userId || "-")}</p>
+            <p>Email invitation : ${escapeHtml(c.invitedEmail || "-")}</p>
+            <p>Statut invitation : ${escapeHtml(c.statutInvitation || "-")}</p>
             <p>Numéro chauffeur : ${escapeHtml(c.numeroChauffeur || "-")}</p>
             <p>Permis : ${escapeHtml(c.numeroPermis || "-")}</p>
             <p>Adresse : ${escapeHtml(c.adresse || "-")}</p>
@@ -428,13 +431,23 @@ function bindForms() {
     data.kilometrageApres10Voyages = numberOrZero(data.kilometrageApres10Voyages);
     const file = form.profilFile.files[0];
     delete data.profilFile;
-    const ref = await addChauffeur(data);
-    if (file && data.userId) {
-      const url = await uploadFile(`chauffeurs/${data.userId}/${file.name}`, file);
-      await updateChauffeur(ref.id, { documentUrl: url });
+
+    try {
+      const result = await inviteDriverAccount(data);
+      if (file && result?.uid) {
+        const url = await uploadFile(`chauffeurs/${result.uid}/${file.name}`, file);
+        const chauffeur = state.chauffeurs.find(c => c.userId === result.uid);
+        if (chauffeur?.id) {
+          await updateChauffeur(chauffeur.id, { documentUrl: url });
+        }
+      }
+      alert(`Invitation envoyée à ${result.email}`);
+      form.reset();
+      await refreshData();
+    } catch (error) {
+      console.error(error);
+      alert(error.message || "Erreur lors de l'invitation du chauffeur");
     }
-    form.reset();
-    await refreshData();
   });
 
   document.getElementById("voyageForm")?.addEventListener("submit", async e => {

@@ -89,3 +89,36 @@ Projet web **mobile-first** pour la gestion des camions avec Firebase.
 - Les listes filtrées du chauffeur ne dépendent plus d'un index composite Firestore pour s'afficher.
 - Un fichier `firestore.indexes.json` est inclus si tu veux quand même créer l'index recommandé plus tard.
 - Les rules `chauffeurs` acceptent maintenant les champs envoyés par le formulaire.
+
+
+## Invitation chauffeur par email
+
+Cette version ajoute une vraie invitation chauffeur.
+
+### Ce que fait l'admin
+- remplit le formulaire chauffeur avec email + nom
+- clique sur enregistrer
+- l'application appelle la Cloud Function `inviteDriver`
+- la function crée le compte Firebase Auth du chauffeur
+- elle crée ou met à jour `users/{uid}` avec `role: "chauffeur"`
+- elle crée ou met à jour la fiche `chauffeurs`
+- elle génère un lien officiel Firebase de création/réinitialisation du mot de passe
+- elle dépose un email dans la collection `mail`
+
+### À activer côté Firebase
+1. Authentication > Email/Password
+2. Cloud Functions déployées (`functions/index.js`)
+3. Extension officielle Trigger Email connectée à la collection `mail`
+
+### Commandes Functions
+```bash
+cd functions
+npm install
+firebase deploy --only functions
+```
+
+### Trigger Email
+Installe l'extension Firebase `firestore-send-email` et choisis la collection `mail`.
+
+### Important
+Sans Cloud Functions + Trigger Email, le bouton invitation ne pourra pas envoyer le mail automatiquement.

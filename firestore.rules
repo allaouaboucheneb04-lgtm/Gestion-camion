@@ -75,6 +75,8 @@ service cloud.firestore {
           "telephone",
           "kilometrageApres10Voyages",
           "documentUrl",
+          "invitedEmail",
+          "statutInvitation",
           "createdAt",
           "updatedAt"
         ]) &&
