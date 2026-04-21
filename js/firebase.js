@@ -73,15 +73,33 @@ export async function updateRecord(colName, id, data) {
 export async function deleteRecord(colName, id) {
   return deleteDoc(doc(db, colName, id));
 }
+function asMillis(value) {
+  if (!value) return 0;
+  if (typeof value?.toMillis === "function") return value.toMillis();
+  if (typeof value?.toDate === "function") return value.toDate().getTime();
+  if (value instanceof Date) return value.getTime();
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function sortRecords(items, orderField = "createdAt") {
+  return [...items].sort((a, b) => asMillis(b?.[orderField]) - asMillis(a?.[orderField]));
+}
+
 export async function listRecords(colName, orderField = "createdAt") {
-  const q = query(collection(db, colName), orderBy(orderField, "desc"));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  try {
+    const q = query(collection(db, colName), orderBy(orderField, "desc"));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    const snap = await getDocs(collection(db, colName));
+    return sortRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })), orderField);
+  }
 }
 export async function listWhere(colName, field, op, value, orderField = "createdAt") {
-  const q = query(collection(db, colName), where(field, op, value), orderBy(orderField, "desc"));
+  const q = query(collection(db, colName), where(field, op, value));
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return sortRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })), orderField);
 }
 
 // Business helpers

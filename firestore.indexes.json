@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "voyages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "chauffeurId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

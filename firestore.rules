@@ -64,7 +64,34 @@ service cloud.firestore {
 
     match /chauffeurs/{chauffeurId} {
       allow read: if isAdmin() || (isDriver() && resource.data.userId == request.auth.uid);
-      allow create, update, delete: if isAdmin();
+
+      allow create, update: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          "userId",
+          "nom",
+          "numeroChauffeur",
+          "numeroPermis",
+          "adresse",
+          "telephone",
+          "kilometrageApres10Voyages",
+          "documentUrl",
+          "createdAt",
+          "updatedAt"
+        ]) &&
+        request.resource.data.userId is string &&
+        request.resource.data.nom is string &&
+        (!("numeroChauffeur" in request.resource.data) || request.resource.data.numeroChauffeur is string) &&
+        (!("numeroPermis" in request.resource.data) || request.resource.data.numeroPermis is string) &&
+        (!("adresse" in request.resource.data) || request.resource.data.adresse is string) &&
+        (!("telephone" in request.resource.data) || request.resource.data.telephone is string) &&
+        (!("kilometrageApres10Voyages" in request.resource.data) ||
+          request.resource.data.kilometrageApres10Voyages is int ||
+          request.resource.data.kilometrageApres10Voyages is float) &&
+        (!("documentUrl" in request.resource.data) || request.resource.data.documentUrl is string) &&
+        isTimestampField("createdAt") &&
+        isTimestampField("updatedAt");
+
+      allow delete: if isAdmin();
     }
 
     match /voyages/{voyageId} {

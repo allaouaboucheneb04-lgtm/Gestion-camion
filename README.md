@@ -82,3 +82,10 @@ Projet web **mobile-first** pour la gestion des camions avec Firebase.
   - filtre par période
   - export Excel
   - alertes entretien
+
+
+## Optimisations ajoutées
+
+- Les listes filtrées du chauffeur ne dépendent plus d'un index composite Firestore pour s'afficher.
+- Un fichier `firestore.indexes.json` est inclus si tu veux quand même créer l'index recommandé plus tard.
+- Les rules `chauffeurs` acceptent maintenant les champs envoyés par le formulaire.
