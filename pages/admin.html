@@ -1,194 +1,70 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin - Gestion Entreprise Camions</title>
-<link rel="stylesheet" href="../css/style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - Gestion Camion Pro</title>
+  <link rel="stylesheet" href="../css/style.css" />
 </head>
 <body>
-<div id="overlay" class="overlay"></div>
-<div class="app">
-  <aside id="sidebar" class="sidebar">
-    <div class="side-head">
-      <div><h2>Gestion Camions</h2><p class="muted">Admin</p></div>
-      <button id="closeMenu" class="close-menu">✕</button>
-    </div>
-    <nav class="nav">
-      <button class="nav-btn active" data-section="dashboard">Dashboard</button>
-      <button class="nav-btn" data-section="camions">Camions</button>
-      <button class="nav-btn" data-section="chauffeurs">Chauffeurs</button>
-      <button class="nav-btn" data-section="voyages">Voyages</button>
-      <button class="nav-btn" data-section="entretiens">Entretiens</button>
-      <button class="nav-btn" data-section="depenses">Dépenses</button>
-      <button class="nav-btn" data-section="assignations">Assignations</button>
-      <button class="nav-btn" data-section="rapport">Rapport</button>
-    </nav>
-    <button id="logoutBtn" class="btnDanger">Déconnexion</button>
-  </aside>
-
-  <main class="main">
-    <div class="mobile-top">
-      <button id="menuToggle" class="menu-btn">☰</button>
-      <div><h1 id="pageTitleMobile" style="margin:0">Dashboard</h1><p class="muted">Gestion d'entreprise</p></div>
-    </div>
-
-    <header class="topbar">
-      <div><h1 id="pageTitle">Dashboard</h1><p class="muted">Camions, chauffeurs, voyages, entretien, dépenses</p></div>
-      <div class="filters">
-        <input id="searchInput" type="search" placeholder="Recherche rapide...">
-        <select id="periodFilter">
-          <option value="all">Toute période</option>
-          <option value="today">Aujourd'hui</option>
-          <option value="month">Ce mois</option>
-        </select>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-row">
+          <span class="brand-badge">GC</span>
+          <div>
+            <strong>Gestion Camion</strong>
+            <small>Administration</small>
+          </div>
+        </div>
+        <button id="closeMenu" class="close-menu" aria-label="Fermer">✕</button>
       </div>
-    </header>
 
-    <section id="dashboardSection" class="section active">
-      <div class="stats">
-        <div class="stat"><span>Revenus</span><strong id="revKpi">0 $</strong></div>
-        <div class="stat"><span>Dépenses</span><strong id="depKpi">0 $</strong></div>
-        <div class="stat"><span>Bénéfice</span><strong id="benKpi">0 $</strong></div>
-        <div class="stat"><span>Voyages</span><strong id="voyKpi">0</strong></div>
-      </div>
-      <div class="panel"><h3>Résumé financier</h3><canvas id="chart" height="140"></canvas></div>
-      <div class="kpis">
-        <div class="stat"><span>Camions</span><strong id="truckKpi">0</strong></div>
-        <div class="stat"><span>Chauffeurs</span><strong id="driverKpi">0</strong></div>
-        <div class="stat"><span>Entretiens</span><strong id="maintKpi">0</strong></div>
-        <div class="stat"><span>Dépenses autres</span><strong id="otherKpi">0 $</strong></div>
-      </div>
-    </section>
+      <nav class="menu nav-list">
+        <button class="menu-item nav-btn active" data-view="dashboard">Dashboard</button>
+        <button class="menu-item nav-btn" data-view="trucks">Camions</button>
+        <button class="menu-item nav-btn" data-view="drivers">Chauffeurs</button>
+        <button class="menu-item nav-btn" data-view="trips">Voyages</button>
+        <button class="menu-item nav-btn" data-view="maintenance">Entretien</button>
+        <button class="menu-item nav-btn" data-view="expenses">Autres dépenses</button>
+        <button class="menu-item nav-btn" data-view="settings">Réglages</button>
+      </nav>
 
-    <section id="camionsSection" class="section">
-      <div class="panel">
-        <h3>Nouveau camion</h3>
-        <form id="truckForm" class="form-grid">
-          <input name="truckNumber" placeholder="Numéro de camion" required>
-          <input name="plate" placeholder="Numéro de plaque" required>
-          <input name="brandModel" placeholder="Marque de camion et modèle" required>
-          <input name="trailerNumber" placeholder="Numéro de remorque">
-          <input name="trailerPlate" placeholder="Plaque de remorque">
-          <input name="note" placeholder="Remarque">
-          <button class="btn full" type="submit">Enregistrer</button>
-        </form>
+      <div class="sidebar-bottom">
+        <button id="logoutBtn" class="btn danger w-full">Déconnexion</button>
       </div>
-      <div class="panel"><h3>Liste des camions</h3><div id="truckCards" class="cards"></div></div>
-    </section>
+    </aside>
 
-    <section id="chauffeursSection" class="section">
-      <div class="panel">
-        <h3>Nouveau chauffeur</h3>
-        <form id="driverForm" class="form-grid">
-          <input name="name" placeholder="Nom du chauffeur" required>
-          <input name="driverNumber" placeholder="Numéro de chauffeur">
-          <input name="licenseNumber" placeholder="Numéro de permis">
-          <input name="address" placeholder="Adresse">
-          <input name="email" placeholder="Email lié au compte">
-          <input name="odometerAfter10Trips" type="number" step="0.01" placeholder="Kilométrage après chèque 10 voyages">
-          <button class="btn full" type="submit">Enregistrer</button>
-        </form>
-      </div>
-      <div class="panel"><h3>Liste des chauffeurs</h3><div id="driverCards" class="cards"></div></div>
-    </section>
-
-    <section id="voyagesSection" class="section">
-      <div class="panel">
-        <h3>Nouveau voyage</h3>
-        <form id="tripForm" class="form-grid">
-          <input name="client" placeholder="Client" required>
-          <input name="destination" placeholder="Destination" required>
-          <input name="departDate" type="date" required>
-          <input name="arrivalDate" type="date">
-          <input name="price" type="number" step="0.01" placeholder="Prix de course" required>
-          <input name="fuel" type="number" step="0.01" placeholder="Gasoil">
-          <input name="missionFees" type="number" step="0.01" placeholder="Frais de mission">
-          <input name="authorExpense" placeholder="Auteur, dépenses">
-          <select name="driverId" id="tripDriverSelect"><option value="">Nom du chauffeur</option></select>
-          <select name="truckId" id="tripTruckSelect"><option value="">Camion</option></select>
-          <input name="returnClient" placeholder="Client retour">
-          <input name="returnDestination" placeholder="Destination retour">
-          <input name="returnDate" type="date">
-          <input name="returnArrivalDate" type="date">
-          <input name="returnPrice" type="number" step="0.01" placeholder="Prix de course retour">
-          <input name="returnMissionFees" type="number" step="0.01" placeholder="Frais de mission retour">
-          <input name="returnFuel" type="number" step="0.01" placeholder="Gasoil retour">
-          <button class="btn full" type="submit">Enregistrer</button>
-        </form>
-      </div>
-      <div class="panel"><h3>Liste des voyages</h3><div id="tripCards" class="cards"></div></div>
-    </section>
-
-    <section id="entretiensSection" class="section">
-      <div class="panel">
-        <h3>Nouvel entretien camion / remorque</h3>
-        <form id="maintenanceForm" class="form-grid">
-          <select name="truckId" id="maintenanceTruckSelect"><option value="">Choisir camion</option></select>
-          <select name="category" required>
-            <option value="">Catégorie</option>
-            <option>Pneus</option>
-            <option>Vidange</option>
-            <option>Pièces mécaniques</option>
-            <option>Frais de réparation</option>
-            <option>Tout hôtel réparation</option>
-          </select>
-          <input name="amount" type="number" step="0.01" placeholder="Montant" required>
-          <input name="date" type="date" required>
-          <textarea name="note" class="full" placeholder="Détail / remarque"></textarea>
-          <button class="btn full" type="submit">Enregistrer</button>
-        </form>
-      </div>
-      <div class="panel"><h3>Liste des entretiens</h3><div id="maintenanceCards" class="cards"></div></div>
-    </section>
-
-    <section id="depensesSection" class="section">
-      <div class="panel">
-        <h3>Autre dépense</h3>
-        <form id="expenseForm" class="form-grid">
-          <select name="type" required>
-            <option value="">Type de dépense</option>
-            <option>ASSURANCE, chauffeur</option>
-            <option>Frais comptable</option>
-            <option>Déclaration d’impôts</option>
-            <option>Salaire, chauffeur</option>
-            <option>Assurance du camion</option>
-            <option>Assurance, de marchandise</option>
-          </select>
-          <input name="amount" type="number" step="0.01" placeholder="Montant" required>
-          <input name="date" type="date" required>
-          <textarea name="note" class="full" placeholder="Remarque"></textarea>
-          <button class="btn full" type="submit">Enregistrer</button>
-        </form>
-      </div>
-      <div class="panel"><h3>Liste des dépenses</h3><div id="expenseCards" class="cards"></div></div>
-    </section>
-
-    <section id="assignationsSection" class="section">
-      <div class="panel">
-        <h3>Assigner un chauffeur à un camion</h3>
-        <form id="assignForm" class="form-grid">
-          <select name="driverId" id="assignDriverSelect" required><option value="">Choisir chauffeur</option></select>
-          <select name="truckId" id="assignTruckSelect" required><option value="">Choisir camion</option></select>
-          <input name="assignedDate" type="date" required>
-          <button class="btn full" type="submit">Assigner</button>
-        </form>
-      </div>
-      <div class="panel"><h3>Assignations</h3><div id="assignCards" class="cards"></div></div>
-    </section>
-
-    <section id="rapportSection" class="section">
-      <div class="panel">
-        <h3>Rapport global</h3>
-        <div class="table-wrap">
-          <table class="simple-table">
-            <thead><tr><th>Élément</th><th>Valeur</th></tr></thead>
-            <tbody id="reportTable"></tbody>
-          </table>
+    <main class="main">
+      <div class="mobile-topbar">
+        <button id="menuToggle" class="menu-btn" aria-label="Ouvrir le menu">☰</button>
+        <div class="mobile-title-box">
+          <h1 id="pageTitleMobile">Dashboard</h1>
+          <p class="muted" id="welcomeTextMobile">Chargement...</p>
         </div>
       </div>
-    </section>
-  </main>
-</div>
-<script type="module" src="../js/firebase.js"></script>
-<script type="module" src="../js/admin.js"></script>
-</body></html>
+      <div id="menuOverlay" class="menu-overlay"></div>
+
+      <header class="topbar">
+        <div>
+          <h1 id="pageTitle">Dashboard</h1>
+          <p class="muted" id="welcomeText">Chargement...</p>
+        </div>
+        <div class="topbar-actions" style="width:min(100%,380px)">
+          <input id="globalSearch" class="search" placeholder="Recherche rapide..." />
+        </div>
+      </header>
+
+      <section id="dashboardView" class="view active"></section>
+      <section id="trucksView" class="view"></section>
+      <section id="driversView" class="view"></section>
+      <section id="tripsView" class="view"></section>
+      <section id="maintenanceView" class="view"></section>
+      <section id="expensesView" class="view"></section>
+      <section id="settingsView" class="view"></section>
+    </main>
+  </div>
+
+  <script type="module" src="../js/admin.js"></script>
+</body>
+</html>

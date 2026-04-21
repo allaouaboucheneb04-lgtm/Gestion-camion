@@ -1,93 +1,210 @@
+import { auth, db } from './firebase.js';
+import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, serverTimestamp, doc, getDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { money, fmtDate, slugContains } from './helpers.js';
 
-import { auth, db } from "./firebase.js";
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { collection, addDoc, getDocs, query, where, doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { qs, qsa, money, shortDate, openMobileMenu, closeMobileMenu } from "./utils.js";
+let me = null;
+let trips = [];
+let editId = null;
 
-let uid=null, myUser=null, myDriver=null, trips=[], assigns=[], trucks=[];
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    window.location.href = '../index.html';
+    return;
+  }
 
-onAuthStateChanged(auth, async user=>{
-  if(!user){ window.location.href="../index.html"; return; }
-  uid=user.uid;
-  bindUI();
-  await loadAll();
-  render();
+  const snap = await getDoc(doc(db, 'users', user.uid));
+  if (!snap.exists()) {
+    await signOut(auth);
+    window.location.href = '../index.html';
+    return;
+  }
+
+  me = { uid: user.uid, ...snap.data() };
+  if (me.role !== 'chauffeur') {
+    window.location.href = './admin.html';
+    return;
+  }
+
+  byId('driverWelcome').textContent = `Bienvenue ${me.name || me.email || 'Chauffeur'}`;
+  bindShell();
+  renderForm();
+  await refreshTrips();
 });
 
-function bindUI(){
-  qs("#logoutBtn").onclick=()=>signOut(auth).then(()=>window.location.href="../index.html");
-  qs("#driverTripForm").onsubmit = async (e)=>{
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const data = Object.fromEntries(fd.entries());
-    ["price","fuel","missionFees","returnPrice","returnMissionFees","returnFuel"].forEach(k=>data[k]=Number(data[k]||0));
-    data.driverId = myDriver?.id || "";
-    data.truckId = assigns[0]?.truckId || "";
-    data.createdByUid = uid;
-    data.createdAt = serverTimestamp();
-    await addDoc(collection(db, "voyages"), data);
-    e.target.reset();
-    await loadTrips();
-    render();
+function bindShell() {
+  byId('logoutBtn').addEventListener('click', async () => {
+    await signOut(auth);
+    window.location.href = '../index.html';
+  });
+
+  byId('driverSearch').addEventListener('input', renderTrips);
+  byId('driverCancelEdit').addEventListener('click', () => {
+    editId = null;
+    renderForm();
+  });
+}
+
+async function refreshTrips() {
+  const snap = await getDocs(query(collection(db, 'trips'), where('driverUid', '==', me.uid)));
+  trips = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => getTime(b.updatedAt || b.createdAt) - getTime(a.updatedAt || a.createdAt));
+
+  renderStats();
+  renderTrips();
+}
+
+function renderForm() {
+  const current = trips.find((item) => item.id === editId) || null;
+  byId('driverFormTitle').textContent = current ? 'Modifier un voyage' : 'Ajouter un voyage';
+  byId('driverCancelEdit').style.display = current ? 'inline-flex' : 'none';
+
+  byId('driverTripForm').innerHTML = `
+    ${inputField('client', 'Client', current?.client)}
+    ${inputField('destination', 'Destination', current?.destination)}
+    ${inputField('departureDate', 'Date départ', toInputDate(current?.departureDate), 'datetime-local')}
+    ${inputField('arrivalDate', 'Date arrivée', toInputDate(current?.arrivalDate), 'datetime-local')}
+    ${inputField('price', 'Prix course aller', current?.price, 'number')}
+    ${inputField('fuel', 'Gasoil aller', current?.fuel, 'number')}
+    ${inputField('missionFee', 'Frais mission aller', current?.missionFee, 'number')}
+    ${inputField('truckNumber', 'Camion', current?.truckNumber)}
+    ${inputField('returnClient', 'Client retour', current?.returnClient)}
+    ${inputField('returnDestination', 'Destination retour', current?.returnDestination)}
+    ${inputField('returnDate', 'Date retour', toInputDate(current?.returnDate), 'datetime-local')}
+    ${inputField('returnArrivalDate', 'Date arrivée retour', toInputDate(current?.returnArrivalDate), 'datetime-local')}
+    ${inputField('returnPrice', 'Prix course retour', current?.returnPrice, 'number')}
+    ${inputField('returnFuel', 'Gasoil retour', current?.returnFuel, 'number')}
+    ${inputField('returnMissionFee', 'Frais mission retour', current?.returnMissionFee, 'number')}
+    ${inputField('authorExpense', 'Auteur, dépenses', current?.authorExpense || me.name || me.email, 'text', 'full')}
+    <div class="full actions"><button class="btn primary" type="submit">${current ? 'Mettre à jour' : 'Enregistrer'}</button></div>
+  `;
+
+  byId('driverTripForm').onsubmit = saveTrip;
+}
+
+async function saveTrip(event) {
+  event.preventDefault();
+
+  const payload = {
+    client: val('client'),
+    destination: val('destination'),
+    departureDate: val('departureDate'),
+    arrivalDate: val('arrivalDate'),
+    price: num(val('price')),
+    fuel: num(val('fuel')),
+    missionFee: num(val('missionFee')),
+    truckNumber: val('truckNumber'),
+    driverName: me.name || me.email,
+    driverUid: me.uid,
+    returnClient: val('returnClient'),
+    returnDestination: val('returnDestination'),
+    returnDate: val('returnDate'),
+    returnArrivalDate: val('returnArrivalDate'),
+    returnPrice: num(val('returnPrice')),
+    returnFuel: num(val('returnFuel')),
+    returnMissionFee: num(val('returnMissionFee')),
+    authorExpense: val('authorExpense'),
+    updatedAt: serverTimestamp()
   };
-  qsa(".nav-btn").forEach(btn=>btn.addEventListener("click", ()=>switchSection(btn.dataset.section)));
-  qs("#menuToggle")?.addEventListener("click", openMobileMenu);
-  qs("#closeMenu")?.addEventListener("click", closeMobileMenu);
-  qs("#overlay")?.addEventListener("click", closeMobileMenu);
-  qsa(".nav-btn").forEach(btn=>btn.addEventListener("click", ()=>{ if(window.innerWidth<=1100) closeMobileMenu(); }));
+
+  if (editId) {
+    await updateDoc(doc(db, 'trips', editId), payload);
+  } else {
+    await addDoc(collection(db, 'trips'), {
+      ...payload,
+      createdAt: serverTimestamp()
+    });
+  }
+
+  editId = null;
+  renderForm();
+  await refreshTrips();
 }
 
-function switchSection(key){
-  const map = {home:"#homeSection", myTrips:"#myTripsSection", myTruck:"#myTruckSection"};
-  Object.values(map).forEach(sel=>qs(sel).classList.remove("active"));
-  qs(map[key]).classList.add("active");
-  qsa(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.section===key));
+function renderStats() {
+  const revenue = trips.reduce((sum, item) => sum + num(item.price) + num(item.returnPrice), 0);
+  const costs = trips.reduce((sum, item) => sum + num(item.fuel) + num(item.missionFee) + num(item.returnFuel) + num(item.returnMissionFee), 0);
+  const net = revenue - costs;
+
+  byId('driverStats').innerHTML = `
+    <div class="card stat-card"><h3>Mes voyages</h3><div class="value">${trips.length}</div></div>
+    <div class="card stat-card"><h3>Mon revenu</h3><div class="value">${money(revenue)}</div></div>
+    <div class="card stat-card"><h3>Mes coûts</h3><div class="value">${money(costs)}</div></div>
+    <div class="card stat-card"><h3>Net estimé</h3><div class="value">${money(net)}</div></div>
+  `;
 }
 
-async function loadAll(){
-  const u = await getDoc(doc(db, "users", uid)); myUser = u.exists()? {id:u.id, ...u.data()} : null;
-  const dSnap = await getDocs(query(collection(db, "chauffeurs"), where("email", "==", (myUser?.email||""))));
-  myDriver = dSnap.docs[0] ? {id:dSnap.docs[0].id, ...dSnap.docs[0].data()} : null;
-  const tSnap = await getDocs(collection(db, "camions")); trucks = tSnap.docs.map(d=>({id:d.id, ...d.data()}));
-  await loadAssignments(); await loadTrips();
-}
-async function loadAssignments(){
-  if(!myDriver){ assigns=[]; return; }
-  const s = await getDocs(query(collection(db, "assignations"), where("driverId", "==", myDriver.id)));
-  assigns = s.docs.map(d=>({id:d.id, ...d.data()}));
-}
-async function loadTrips(){
-  if(!myDriver){ trips=[]; return; }
-  const s = await getDocs(query(collection(db, "voyages"), where("driverId", "==", myDriver.id)));
-  trips = s.docs.map(d=>({id:d.id, ...d.data()}));
-}
-function truckInfo(id){ return trucks.find(x=>x.id===id); }
+function renderTrips() {
+  const search = byId('driverSearch').value.trim();
+  const filtered = !search ? trips : trips.filter((trip) => (
+    slugContains(trip.client, search) ||
+    slugContains(trip.destination, search) ||
+    slugContains(trip.returnClient, search) ||
+    slugContains(trip.returnDestination, search) ||
+    slugContains(trip.truckNumber, search)
+  ));
 
-function render(){
-  const revenue = trips.reduce((s,x)=>s+Number(x.price||0)+Number(x.returnPrice||0),0);
-  qs("#myTripCount").textContent = trips.length;
-  qs("#myRevenue").textContent = money(revenue);
-  qs("#myOdo").textContent = myDriver?.odometerAfter10Trips || "-";
-  const myTruck = truckInfo(assigns[0]?.truckId);
-  qs("#myTruckKpi").textContent = myTruck ? (myTruck.truckNumber || myTruck.brandModel || "-") : "-";
+  byId('driverTripList').innerHTML = filtered.length ? filtered.map((trip) => `
+    <div class="list-item">
+      <div>
+        <h4>${escapeHtml(trip.client || '-')} → ${escapeHtml(trip.destination || '-')}</h4>
+        <p><strong>Départ :</strong> ${fmtDate(trip.departureDate)} | <strong>Arrivée :</strong> ${fmtDate(trip.arrivalDate)}</p>
+        <p><strong>Prix aller :</strong> ${money(trip.price)} | <strong>Gasoil aller :</strong> ${money(trip.fuel)} | <strong>Frais mission aller :</strong> ${money(trip.missionFee)}</p>
+        <p><strong>Retour :</strong> ${escapeHtml(trip.returnClient || '-')} → ${escapeHtml(trip.returnDestination || '-')}</p>
+        <p><strong>Date retour :</strong> ${fmtDate(trip.returnDate)} | <strong>Arrivée retour :</strong> ${fmtDate(trip.returnArrivalDate)}</p>
+        <p><strong>Prix retour :</strong> ${money(trip.returnPrice)} | <strong>Gasoil retour :</strong> ${money(trip.returnFuel)} | <strong>Frais mission retour :</strong> ${money(trip.returnMissionFee)}</p>
+        <p><strong>Camion :</strong> ${escapeHtml(trip.truckNumber || '-')} | <strong>Auteur dépenses :</strong> ${escapeHtml(trip.authorExpense || '-')}</p>
+      </div>
+      <div class="actions">
+        <button class="btn secondary" data-edit-id="${trip.id}">Modifier</button>
+        <button class="btn danger" data-delete-id="${trip.id}">Supprimer</button>
+      </div>
+    </div>
+  `).join('') : '<div class="empty">Aucun voyage pour le moment</div>';
 
-  qs("#myTripCards").innerHTML = trips.length ? trips.map(x=>`
-    <div class="card-item">
-      <h4>${x.client||"-"}</h4>
-      <p><strong>Destination:</strong> ${x.destination||"-"}</p>
-      <p><strong>Date départ / arrivée:</strong> ${shortDate(x.departDate)} → ${shortDate(x.arrivalDate)}</p>
-      <p><strong>Prix:</strong> ${money(x.price||0)}</p>
-      <p><strong>Gasoil:</strong> ${money(x.fuel||0)}</p>
-      <p><strong>Frais mission:</strong> ${money(x.missionFees||0)}</p>
-      <p><strong>Auteur, dépenses:</strong> ${x.authorExpense||"-"}</p>
-      <p><strong>Retour:</strong> ${x.returnClient||"-"} / ${x.returnDestination||"-"}</p>
-    </div>`).join("") : '<p class="muted">Aucun voyage.</p>';
+  document.querySelectorAll('[data-edit-id]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      editId = btn.dataset.editId;
+      renderForm();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
 
-  qs("#myTruckCard").innerHTML = myTruck ? `
-    <div class="card-item">
-      <h4>${myTruck.truckNumber||"-"} <span class="badge">${myTruck.plate||"-"}</span></h4>
-      <p><strong>Marque / modèle:</strong> ${myTruck.brandModel||"-"}</p>
-      <p><strong>Remarque:</strong> ${myTruck.note||"-"}</p>
-      <p><strong>Remorque:</strong> ${myTruck.trailerNumber||"-"} / ${myTruck.trailerPlate||"-"}</p>
-    </div>` : '<p class="muted">Aucun camion assigné.</p>';
+  document.querySelectorAll('[data-delete-id]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Supprimer ce voyage ?')) return;
+      await deleteDoc(doc(db, 'trips', btn.dataset.deleteId));
+      if (editId === btn.dataset.deleteId) {
+        editId = null;
+        renderForm();
+      }
+      await refreshTrips();
+    });
+  });
 }
+
+function inputField(id, label, value = '', type = 'text', klass = '') {
+  return `<label class="${klass}"><span>${label}</span><input id="${id}" type="${type}" value="${escapeAttr(value ?? '')}" /></label>`;
+}
+
+function toInputDate(value) {
+  if (!value) return '';
+  const date = typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function getTime(value) {
+  if (!value) return 0;
+  if (typeof value?.toDate === 'function') return value.toDate().getTime();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function num(value) { return Number(value || 0); }
+function val(id) { return byId(id)?.value?.trim?.() ?? byId(id)?.value ?? ''; }
+function byId(id) { return document.getElementById(id); }
+function escapeHtml(value = '') { return String(value).replace(/[&<>"']/g, (s) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s])); }
+function escapeAttr(value = '') { return escapeHtml(value).replace(/`/g, '&#96;'); }
