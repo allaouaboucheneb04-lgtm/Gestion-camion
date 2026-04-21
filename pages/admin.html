@@ -9,6 +9,7 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
+  <div class="sidebar-header"><h2>Gestion Camion</h2><button id="closeMenu" class="close-menu" aria-label="Fermer le menu">✕</button></div>
       <div class="sidebar-top">
         <div class="brand-row"><span class="brand-badge">GC</span><div><strong>Gestion Camion</strong><small>Admin</small></div></div>
         <button id="closeSidebar" class="icon-btn mobile-only">✕</button>
@@ -28,6 +29,16 @@
     </aside>
 
     <main class="main">
+
+      <div class="mobile-topbar">
+        <button id="menuToggle" class="menu-btn" aria-label="Ouvrir le menu">☰</button>
+        <div class="mobile-title-box">
+          <h1 id="pageTitle">Dashboard</h1>
+          <p class="muted">Bienvenue</p>
+        </div>
+      </div>
+      <div id="menuOverlay" class="menu-overlay"></div>
+
       <header class="topbar">
         <div class="left-topbar">
           <button id="openSidebar" class="icon-btn mobile-only">☰</button>

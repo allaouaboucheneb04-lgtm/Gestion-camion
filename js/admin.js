@@ -360,3 +360,47 @@ async function refresh() {
   await loadAll();
   renderAll();
 }
+
+
+
+document.addEventListener("DOMContentLoaded", () => {
+  const menuToggle = document.getElementById("menuToggle");
+  const closeMenu = document.getElementById("closeMenu");
+  const sidebar = document.getElementById("sidebar");
+  const overlay = document.getElementById("menuOverlay");
+  const navButtons = document.querySelectorAll(".nav-btn");
+
+  function openMenu() {
+    sidebar?.classList.add("open");
+    overlay?.classList.add("show");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeSidebar() {
+    sidebar?.classList.remove("open");
+    overlay?.classList.remove("show");
+    document.body.style.overflow = "";
+  }
+
+  menuToggle?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openMenu();
+  });
+
+  closeMenu?.addEventListener("click", closeSidebar);
+  overlay?.addEventListener("click", closeSidebar);
+
+  navButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (window.innerWidth <= 900) {
+        closeSidebar();
+      }
+    });
+  });
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 900) {
+      closeSidebar();
+    }
+  });
+});
