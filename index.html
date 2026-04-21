@@ -1,60 +1,19 @@
 <!DOCTYPE html>
-<html lang="fr" dir="ltr">
+<html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0f172a" />
-  <title>Gestion Camion Pro</title>
-  <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="css/style.css" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+<meta charset="UTF-8">
+<title>Gestion Camion</title>
+<link rel="stylesheet" href="css/style.css">
 </head>
-<body class="auth-body">
-  <div class="auth-shell">
-    <div class="auth-brand card soft-glow">
-      <div class="brand-badge">GC</div>
-      <div>
-        <h1 data-i18n="app_name">Gestion Camion Pro</h1>
-        <p class="muted" data-i18n="auth_subtitle">Application web installable pour admin et chauffeurs</p>
-      </div>
-    </div>
+<body>
+<div class="card">
+<h2>Connexion / تسجيل الدخول</h2>
+<input id="email" placeholder="Email">
+<input id="password" type="password" placeholder="Mot de passe">
+<button onclick="login()">Connexion</button>
+</div>
 
-    <div class="card auth-card">
-      <div class="lang-switch">
-        <button class="chip active" data-lang="fr">FR</button>
-        <button class="chip" data-lang="ar">AR</button>
-      </div>
-
-      <h2 data-i18n="login_title">Connexion</h2>
-      <p class="muted" data-i18n="login_help">Connectez-vous avec votre compte Firebase.</p>
-
-      <form id="loginForm" class="stack">
-        <label>
-          <span data-i18n="email">Email</span>
-          <input type="email" id="email" placeholder="email@example.com" required />
-        </label>
-        <label>
-          <span data-i18n="password">Mot de passe</span>
-          <input type="password" id="password" placeholder="********" required />
-        </label>
-        <button class="btn primary" type="submit" data-i18n="login_btn">Se connecter</button>
-      </form>
-
-      <div class="demo-box">
-        <strong data-i18n="first_setup">Première configuration</strong>
-        <p class="muted" data-i18n="setup_hint">Remplissez votre fichier firebase-config.js puis créez les utilisateurs dans Firebase Auth. Ajoutez ensuite leur rôle dans Firestore dans la collection <code>users</code>.</p>
-      </div>
-
-      <div id="status" class="status"></div>
-    </div>
-  </div>
-
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js"></script>
-  <script src="js/translations.js"></script>
-  <script src="js/common.js"></script>
-  <script src="js/auth.js"></script>
+<script type="module" src="js/firebase.js"></script>
+<script type="module" src="js/auth.js"></script>
 </body>
 </html>

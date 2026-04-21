@@ -1,17 +1,17 @@
-const loginForm = document.getElementById('loginForm');
-if (loginForm) {
-  loginForm.addEventListener('submit', async e => {
-    e.preventDefault();
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value.trim();
-    try {
-      const cred = await auth.signInWithEmailAndPassword(email, password);
-      const userDoc = await db.collection('users').doc(cred.user.uid).get();
-      if (!userDoc.exists) throw new Error('Utilisateur sans profil Firestore.');
-      const role = userDoc.data().role;
-      location.href = role === 'admin' ? './admin.html' : './chauffeur.html';
-    } catch (err) {
-      showToast(err.message || 'Connexion impossible.', 'error');
-    }
-  });
+import { auth, db } from "./firebase.js";
+import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+window.login = async function(){
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+
+  const user = await signInWithEmailAndPassword(auth,email,password);
+  const snap = await getDoc(doc(db,"users",user.user.uid));
+
+  if(snap.data().role==="admin"){
+    window.location="pages/admin.html";
+  } else {
+    window.location="pages/chauffeur.html";
+  }
 }
