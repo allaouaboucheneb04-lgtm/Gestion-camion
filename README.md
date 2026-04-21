@@ -98,3 +98,10 @@ Pour un chauffeur:
 - Salaire chauffeur
 - Assurance du camion
 - Assurance de marchandise
+
+
+## Affichage des champs métier
+La version mise à jour affiche maintenant dans les cartes :
+- camion : remorque + plaque remorque + remarque
+- chauffeur : email + kilométrage après 10 voyages
+- voyage : gasoil, frais de mission, auteur des dépenses, informations de retour
