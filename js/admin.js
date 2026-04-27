@@ -12,6 +12,22 @@ import {
   requireRole, bindLogout, bindSidebar, installSW
 } from "./common.js";
 
+
+function displayError(error, context = "Erreur") {
+  console.error(context, error);
+  const raw = error?.message || error?.code || String(error || "Erreur inconnue");
+  let msg = raw;
+  if (raw.includes("internal")) {
+    msg = "Erreur interne Firebase Functions. Vérifie que la Cloud Function inviteDriver est déployée, que ton compte est admin, et que l’extension Trigger Email est configurée.";
+  }
+  if (raw.includes("not-found") || raw.includes("Function")) {
+    msg = "La Cloud Function inviteDriver n’est pas déployée. Déploie le dossier functions avec Firebase CLI.";
+  }
+  if (raw.includes("permission-denied")) {
+    msg = "Permission refusée: ton document users/{uid} doit avoir role: admin.";
+  }
+  alert(context + ": " + msg);
+}
 const state = {
   profile: null,
   camions: [],
@@ -515,11 +531,12 @@ function bindForms() {
     e.preventDefault();
     const form = e.currentTarget;
     const data = formToObject(form);
-    const file = form.photoCamion.files[0];
+    const file = form.photoCamion?.files?.[0];
     delete data.photoCamion;
     const ref = await addCamion(data);
     if (file) {
-      const url = await uploadFile(`camions/${ref.id}/${file.name}`, file);
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+      const url = await uploadFile(`camions/${ref.id}/${Date.now()}-${safeName}`, file);
       await updateCamion(ref.id, { photoUrl: url });
     }
     form.reset();
@@ -530,26 +547,45 @@ function bindForms() {
   document.getElementById("chauffeurForm")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.currentTarget;
+    const submitBtn = form.querySelector('button[type="submit"]');
     const data = formToObject(form);
+    data.email = (data.email || "").trim().toLowerCase();
+    data.nom = (data.nom || "").trim();
     data.kilometrageApres10Voyages = numberOrZero(data.kilometrageApres10Voyages);
-    const file = form.profilFile.files[0];
+    const file = form.profilFile?.files?.[0];
     delete data.profilFile;
 
+    if (!data.email) return alert("Email chauffeur obligatoire.");
+    if (!data.nom) return alert("Nom chauffeur obligatoire.");
+
     try {
-      const result = await inviteDriverAccount(data);
-      if (file && result?.uid) {
-        const url = await uploadFile(`chauffeurs/${result.uid}/${file.name}`, file);
-        const chauffeur = state.chauffeurs.find(c => c.userId === result.uid);
-        if (chauffeur?.id) {
-          await updateChauffeur(chauffeur.id, { documentUrl: url });
-        }
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Création + invitation en cours...";
       }
-      alert(`Invitation envoyée à ${result.email}`);
+
+      const result = await inviteDriverAccount(data);
+
+      if (!result?.uid || !result?.chauffeurDocId) {
+        throw new Error("Invitation créée mais la fonction n’a pas retourné uid/chauffeurDocId. Redéploie functions/index.js.");
+      }
+
+      if (file) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+        const url = await uploadFile(`chauffeurs/${result.uid}/${Date.now()}-${safeName}`, file);
+        await updateChauffeur(result.chauffeurDocId, { documentUrl: url });
+      }
+
       form.reset();
       await refreshData();
+      alert(`Chauffeur créé ✅\nInvitation envoyée à: ${result.email}`);
     } catch (error) {
-      console.error(error);
-      alert(error.message || "Erreur lors de l'invitation du chauffeur");
+      displayError(error, "Création chauffeur");
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Enregistrer le chauffeur";
+      }
     }
   });
 

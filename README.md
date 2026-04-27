@@ -128,3 +128,44 @@ Sans Cloud Functions + Trigger Email, le bouton invitation ne pourra pas envoyer
 
 Dans l’espace Admin > Chauffeurs, un bouton **Détails** est ajouté pour chaque chauffeur.
 Il affiche : profil complet, statut invitation, document/permis, voyages, dépenses liées, revenu, coûts et bénéfice net estimé.
+
+## Correctif création chauffeur propre
+
+Cette version corrige la création chauffeur dans l’admin :
+
+- le formulaire vérifie email + nom avant l’envoi ;
+- le bouton affiche “Création + invitation en cours...” pendant le traitement ;
+- la Cloud Function `inviteDriver` retourne maintenant aussi `chauffeurDocId` ;
+- l’upload du permis/document est enregistré directement sur le bon document chauffeur ;
+- les erreurs Firebase ne s’affichent plus seulement comme `internal`, elles sont expliquées.
+
+### Important pour l’invitation
+
+La création du compte chauffeur + lien de mot de passe nécessite Cloud Functions :
+
+```bash
+cd functions
+npm install
+cd ..
+firebase deploy --only functions
+```
+
+Ensuite, installe/configure l’extension Firebase **Trigger Email** avec la collection :
+
+```text
+mail
+```
+
+Si l’extension email n’est pas configurée, le compte chauffeur peut être créé, mais l’email d’invitation ne sera pas envoyé.
+
+### Si tu vois encore “internal”
+
+Vérifie :
+
+1. ton document `users/{TON_UID}` contient bien :
+```json
+{ "role": "admin" }
+```
+2. la function `inviteDriver` est bien déployée dans Firebase Functions ;
+3. Authentication > Email/Password est activé ;
+4. l’extension Trigger Email est configurée sur la collection `mail`.
