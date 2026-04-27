@@ -253,3 +253,137 @@ html[dir="rtl"] .actions, html[dir="rtl"] .card-header, html[dir="rtl"] .mobile-
 html[dir="rtl"] .driver-card { border-left: 0; border-right: 5px solid #16a34a; }
 html[dir="rtl"] .driver-card.is-inactive { border-right-color: #ef4444; }
 html[dir="rtl"] .lang-switch { left: 14px; right: auto; }
+
+/* =============================
+   Design arabe pro - Algérie RTL
+   ============================= */
+html[dir="rtl"], html[dir="rtl"] body {
+  direction: rtl;
+  text-align: right;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif;
+}
+
+html[dir="rtl"] .app-shell {
+  direction: rtl;
+}
+
+html[dir="rtl"] .sidebar {
+  direction: rtl;
+  text-align: right;
+}
+
+html[dir="rtl"] .brand-wrap,
+html[dir="rtl"] .sidebar-head,
+html[dir="rtl"] .mobile-head,
+html[dir="rtl"] .card-header,
+html[dir="rtl"] .driver-card-top,
+html[dir="rtl"] .actions,
+html[dir="rtl"] .file-row {
+  direction: rtl;
+}
+
+html[dir="rtl"] .menu-item {
+  text-align: right;
+}
+
+html[dir="rtl"] .main {
+  direction: rtl;
+  text-align: right;
+}
+
+html[dir="rtl"] input,
+html[dir="rtl"] textarea,
+html[dir="rtl"] select {
+  direction: rtl;
+  text-align: right;
+}
+
+html[dir="rtl"] input[type="email"],
+html[dir="rtl"] input[type="password"],
+html[dir="rtl"] input[type="tel"] {
+  direction: ltr;
+  text-align: left;
+}
+
+html[dir="rtl"] .stats-grid .stat-card,
+html[dir="rtl"] .item-card,
+html[dir="rtl"] .card,
+html[dir="rtl"] .driver-mini-stats div {
+  text-align: right;
+}
+
+html[dir="rtl"] .driver-card {
+  border-left: 1px solid var(--line);
+  border-right: 5px solid var(--success);
+}
+
+html[dir="rtl"] .driver-card.is-inactive {
+  border-right-color: #ef4444;
+}
+
+html[dir="rtl"] .driver-info-grid p {
+  text-align: right;
+}
+
+html[dir="rtl"] .lang-switch {
+  left: 14px;
+  right: auto;
+}
+
+html[dir="rtl"] .auth-card,
+html[dir="rtl"] .auth-info {
+  text-align: right;
+}
+
+html[dir="rtl"] .auth-info ol {
+  padding-right: 22px;
+  padding-left: 0;
+}
+
+/* Mobile Arabic drawer: opens naturally from the right */
+@media (max-width:760px){
+  html[dir="rtl"] .sidebar {
+    right: 0;
+    left: auto;
+    transform: translateX(100%);
+    border-top-left-radius: 24px;
+    border-bottom-left-radius: 24px;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    box-shadow: -18px 0 40px rgba(15,23,42,.28);
+  }
+  html[dir="rtl"] .sidebar.open {
+    transform: translateX(0);
+  }
+  html[dir="rtl"] .mobile-head {
+    flex-direction: row-reverse;
+  }
+  html[dir="rtl"] .driver-info-grid {
+    grid-template-columns: 1fr;
+  }
+  html[dir="rtl"] .actions .btn,
+  html[dir="rtl"] .actions button {
+    flex: 1 1 auto;
+  }
+}
+
+/* Arabic pro visual polish */
+html[dir="rtl"] .sidebar {
+  background: linear-gradient(180deg, #08111f, #111827);
+}
+html[dir="rtl"] .menu-item.active,
+html[dir="rtl"] .menu-item:hover {
+  background: linear-gradient(135deg, rgba(37,99,235,.30), rgba(22,163,74,.18));
+}
+html[dir="rtl"] .brand-mark {
+  background: linear-gradient(135deg, #1d4ed8, #0f766e);
+}
+html[dir="rtl"] .stat-card .value {
+  letter-spacing: -0.03em;
+}
+html[dir="rtl"] .btn.primary {
+  background: linear-gradient(135deg, #1d4ed8, #0f766e);
+}
+html[dir="rtl"] .btn.primary:hover {
+  filter: brightness(.96);
+}

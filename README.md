@@ -1,40 +1,19 @@
-# Gestion Camion Algérie Pro — Français / عربي
+# Gestion Camion Algérie Pro — FR / عربي
 
-Version adaptée pour une utilisation avec des chauffeurs en Algérie.
+Version avec design arabe professionnel :
+- interface FR / عربي
+- RTL arabe complet
+- sidebar à droite en arabe
+- devise DZD
+- design mobile amélioré
+- chauffeurs actifs/inactifs
+- modification mot de passe chauffeur via email Firebase
 
-## Ajouts
-- Interface bilingue : français / arabe.
-- Bouton flottant `FR / عربي` sur toutes les pages.
-- Mode arabe en RTL automatiquement.
-- Devise changée en dinar algérien : DZD.
-- Format date adapté `fr-DZ` / `ar-DZ`.
-- Fonction chauffeur conservée : actif/inactif, reset mot de passe, voyages, entretien, dépenses.
+Après upload sur GitHub Pages :
+1. Remplace tous les fichiers.
+2. Recharge le site.
+3. Si l'ancien design reste affiché, ajoute `?v=dz2` à l'URL ou supprime le cache Safari.
+4. Publie `firestore.rules` si tu changes les règles.
 
-## Firebase
-Remplis `js/firebase-config.js` avec ton projet Firebase.
-
-## Rôles Firestore
-Dans `users/{uid}` :
-
-```json
-{
-  "name": "Alaoua",
-  "email": "ton@email.com",
-  "role": "admin",
-  "status": "actif"
-}
-```
-
-Pour un chauffeur :
-
-```json
-{
-  "name": "Nom Chauffeur",
-  "email": "chauffeur@email.com",
-  "role": "chauffeur",
-  "status": "actif"
-}
-```
-
-## Important
-Après upload sur GitHub Pages, vide le cache ou change la version du service worker si besoin. Cette version utilise déjà un nouveau cache : `gestion-camion-algerie-bilingue-v1`.
+Important : vérifie que ton admin existe dans Firestore :
+`users/{uid}` avec `role: "admin"`.
