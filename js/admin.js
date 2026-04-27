@@ -4,6 +4,7 @@ import {
   inviteDriverAccount, createDriverAuthAccount, saveUserProfile, sendPasswordReset,
   addVoyage, updateVoyage, deleteVoyage, getVoyages, getOdometres,
   addEntretien, updateEntretien, deleteEntretien, getEntretiens,
+  addAlerteEntretien, updateAlerteEntretien, deleteAlerteEntretien, getAlertesEntretien,
   addDepense, updateDepense, deleteDepense, getDepenses,
   uploadFile
 } from "./firebase.js";
@@ -38,6 +39,7 @@ const state = {
   chauffeurs: [],
   voyages: [],
   entretien: [],
+  alertesEntretien: [],
   depenses: [],
   odometres: [],
   selectedChauffeurId: null,
@@ -70,12 +72,49 @@ function lastKmForCamion(camionId) {
 }
 
 function defaultEntretienInterval(type) {
+  const configured = state.alertesEntretien.find(a => String(a.type || '').toLowerCase() === String(type || '').toLowerCase());
+  if (configured?.intervalKm) return numberOrZero(configured.intervalKm);
   const t = String(type || '').toLowerCase();
   if (t.includes('vidange')) return 10000;
   if (t.includes('pneu')) return 50000;
   if (t.includes('piece') || t.includes('pièce')) return 30000;
   if (t.includes('reparation') || t.includes('réparation')) return 20000;
   return 10000;
+}
+
+function latestEntretienFor(camionId, type) {
+  const t = String(type || '').toLowerCase();
+  return state.entretien
+    .filter(e => e.camionId === camionId && String(e.type || '').toLowerCase() === t && numberOrZero(e.kmEntretien) > 0)
+    .sort((a,b) => numberOrZero(b.kmEntretien) - numberOrZero(a.kmEntretien))[0] || null;
+}
+
+function activeAlerteModels() {
+  return state.alertesEntretien.filter(a => (a.status || 'actif') !== 'inactif');
+}
+
+function buildEntretienSuivis() {
+  const models = activeAlerteModels();
+  if (!models.length || !state.camions.length) return [];
+  const suivis = [];
+  state.camions.forEach(camion => {
+    models.forEach(model => {
+      const last = latestEntretienFor(camion.id, model.type);
+      suivis.push({
+        ...model,
+        modelId: model.id,
+        camionId: camion.id,
+        camionNumero: camion.numeroCamion || camion.numeroPlaque || camion.id,
+        type: model.type,
+        intervalKm: numberOrZero(model.intervalKm) || defaultEntretienInterval(model.type),
+        warningPercent: numberOrZero(model.warningPercent) || 80,
+        kmEntretien: last ? numberOrZero(last.kmEntretien) : numberOrZero(model.kmDepart || 0),
+        lastEntretienDate: last?.date || last?.createdAt || null,
+        lastEntretienId: last?.id || null
+      });
+    });
+  });
+  return suivis;
 }
 
 function entretienProgress(item) {
@@ -85,9 +124,10 @@ function entretienProgress(item) {
   const usedKm = Math.max(0, currentKm - startKm);
   const percent = intervalKm > 0 ? Math.min(100, Math.round((usedKm / intervalKm) * 100)) : 0;
   const remainingKm = Math.max(0, intervalKm - usedKm);
+  const warningPercent = numberOrZero(item.warningPercent) || 80;
   let status = 'ok';
   if (percent >= 100) status = 'danger';
-  else if (percent >= 80) status = 'warning';
+  else if (percent >= warningPercent) status = 'warning';
   return { currentKm, startKm, intervalKm, usedKm, percent, remainingKm, status };
 }
 
@@ -105,8 +145,7 @@ function entretienProgressCircle(item, compact = false) {
 }
 
 function entretienAlerts() {
-  return state.entretien
-    .filter(e => e.camionId)
+  return buildEntretienSuivis()
     .map(e => ({ ...e, progress: entretienProgress(e) }))
     .sort((a,b) => b.progress.percent - a.progress.percent);
 }
@@ -496,18 +535,49 @@ function alertesEntretienHtml() {
   const items = entretienAlerts();
   const danger = items.filter(x => x.progress.status === 'danger').length;
   const warning = items.filter(x => x.progress.status === 'warning').length;
+  const models = state.alertesEntretien;
   return `
     <div class="card maintenance-hero">
-      <div><p class="eyebrow">Alertes entretien</p><h2>Contrôle entretien par kilométrage</h2><p class="muted">Chaque cercle montre où le camion est arrivé par rapport au prochain entretien.</p></div>
-      <div class="driver-mini-stats"><div><strong>${items.length}</strong><span>Suivis</span></div><div><strong>${warning}</strong><span>À surveiller</span></div><div><strong>${danger}</strong><span>Urgents</span></div></div>
+      <div><p class="eyebrow">Alertes entretien</p><h2>Alertes à suivre par kilométrage</h2><p class="muted">L’admin crée les entretiens à suivre une seule fois. Exemple: Vidange chaque 10 000 km. L’app calcule ensuite la progression pour chaque camion.</p></div>
+      <div class="driver-mini-stats"><div><strong>${models.length}</strong><span>Alertes créées</span></div><div><strong>${warning}</strong><span>À surveiller</span></div><div><strong>${danger}</strong><span>Urgents</span></div></div>
     </div>
+
     <div class="card">
-      <div class="card-header"><div><h2>Camions à surveiller</h2><p class="muted">Vert = OK, orange = bientôt, rouge = entretien dépassé.</p></div></div>
+      <div class="card-header"><div><h2>Créer une alerte à suivre</h2><p class="muted">Exemples: Vidange 10 000 km, pneus 50 000 km, contrôle frein 20 000 km.</p></div></div>
+      <form id="alerteEntretienForm" class="form-grid">
+        <label><span>Nom / type entretien</span><input name="type" required placeholder="Ex: Vidange"></label>
+        <label><span>KM à attendre</span><input name="intervalKm" type="number" required placeholder="Ex: 10000"></label>
+        <label><span>Alerte orange à (%)</span><input name="warningPercent" type="number" value="80" placeholder="80"></label>
+        <label><span>Statut</span><select name="status"><option value="actif">Actif</option><option value="inactif">Inactif</option></select></label>
+        <label class="full"><span>Note</span><textarea name="description" placeholder="Ex: changer filtre à huile avec vidange"></textarea></label>
+        <button class="btn primary full" type="submit">Ajouter l’alerte</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div><h2>Alertes configurées</h2><p class="muted">Ces règles s’appliquent automatiquement à tous les camions.</p></div></div>
+      <div class="list">
+        ${models.length ? models.map(a => `
+          <div class="item-card">
+            <h4>${escapeHtml(a.type || '-')} · ${numberOrZero(a.intervalKm).toLocaleString('fr-CA')} km</h4>
+            <p>Statut : <strong>${escapeHtml(a.status || 'actif')}</strong> · Orange à ${numberOrZero(a.warningPercent || 80)}%</p>
+            <p class="muted">${escapeHtml(a.description || '')}</p>
+            <div class="actions">
+              <button class="btn secondary" data-edit-alerte-entretien="${a.id}">Modifier</button>
+              <button class="btn danger" data-delete-alerte-entretien="${a.id}">Supprimer</button>
+            </div>
+          </div>
+        `).join('') : `<div class="item-card"><p>Aucune alerte créée. Ajoute par exemple Vidange / 10000 km.</p></div>`}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div><h2>Suivi par camion</h2><p class="muted">Vert = OK, orange = bientôt, rouge = entretien dépassé.</p></div></div>
       <div class="maintenance-list">
         ${items.length ? items.map(e => `
           <div class="maintenance-alert-card ${e.progress.status}">
             <div class="maintenance-alert-main">
-              <div><h3>${escapeHtml(camionName(e.camionId))}</h3><p>${escapeHtml(e.type || 'Entretien')} · ${formatDate(e.date)}</p><p class="muted">Garage: ${escapeHtml(e.garage || '-')} · Coût: ${money(e.cout)}</p></div>
+              <div><h3>${escapeHtml(camionName(e.camionId))}</h3><p>${escapeHtml(e.type || 'Entretien')}</p><p class="muted">Dernier entretien: ${e.lastEntretienDate ? formatDate(e.lastEntretienDate) : 'non renseigné'} · Départ: ${e.progress.startKm.toLocaleString('fr-CA')} km</p></div>
               ${entretienProgressCircle(e)}
             </div>
             <div class="maintenance-details">
@@ -517,7 +587,7 @@ function alertesEntretienHtml() {
             </div>
             ${e.progress.status === 'danger' ? '<div class="alert-text danger">Entretien dépassé: planifie une intervention.</div>' : e.progress.status === 'warning' ? '<div class="alert-text warning">Attention: entretien bientôt nécessaire.</div>' : '<div class="alert-text ok">Situation normale.</div>'}
           </div>
-        `).join('') : `<div class="item-card"><p>Aucune alerte. Ajoute des entretiens avec KM entretien et intervalle KM.</p></div>`}
+        `).join('') : `<div class="item-card"><p>Ajoute au moins un camion et une alerte à suivre pour voir les cercles.</p></div>`}
       </div>
     </div>
   `;
@@ -741,11 +811,12 @@ async function refreshData() {
     safeLoad("chauffeurs", getChauffeurs),
     safeLoad("voyages", getVoyages),
     safeLoad("entretien", getEntretiens),
+    safeLoad("alertes_entretien", getAlertesEntretien),
     safeLoad("depenses", getDepenses),
     safeLoad("KM journaliers", getOdometres)
   ]);
 
-  [state.camions, state.chauffeurs, state.voyages, state.entretien, state.depenses, state.odometres] = results;
+  [state.camions, state.chauffeurs, state.voyages, state.entretien, state.alertesEntretien, state.depenses, state.odometres] = results;
   render();
 }
 
@@ -858,6 +929,23 @@ function bindActions() {
     if (!update) return;
     await updateVoyage(item.id, update);
     await refreshData();
+  }));
+
+  document.querySelectorAll("[data-delete-alerte-entretien]").forEach(btn => btn.addEventListener("click", async () => {
+    if (!confirm("Supprimer cette alerte à suivre ?")) return;
+    await deleteAlerteEntretien(btn.dataset.deleteAlerteEntretien);
+    await refreshData();
+    setActiveView("alertesEntretien");
+  }));
+  document.querySelectorAll("[data-edit-alerte-entretien]").forEach(btn => btn.addEventListener("click", async () => {
+    const item = pickForEdit(state.alertesEntretien, btn.dataset.editAlerteEntretien);
+    const update = promptUpdate(item, ["type", "intervalKm", "warningPercent", "status", "description"]);
+    if (!update) return;
+    if (update.intervalKm !== undefined) update.intervalKm = numberOrZero(update.intervalKm);
+    if (update.warningPercent !== undefined) update.warningPercent = numberOrZero(update.warningPercent);
+    await updateAlerteEntretien(item.id, update);
+    await refreshData();
+    setActiveView("alertesEntretien");
   }));
 
   document.querySelectorAll("[data-delete-entretien]").forEach(btn => btn.addEventListener("click", async () => {
@@ -1006,6 +1094,22 @@ function bindForms() {
     }
     form.reset();
     await refreshData();
+  });
+
+  document.getElementById("alerteEntretienForm")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const data = formToObject(form);
+    data.type = (data.type || "").trim();
+    data.intervalKm = numberOrZero(data.intervalKm);
+    data.warningPercent = numberOrZero(data.warningPercent || 80);
+    data.status = data.status || "actif";
+    if (!data.type) return alert("Nom/type entretien obligatoire.");
+    if (!data.intervalKm || data.intervalKm <= 0) return alert("KM à attendre obligatoire.");
+    await addAlerteEntretien(data);
+    form.reset();
+    await refreshData();
+    setActiveView("alertesEntretien");
   });
 
   document.getElementById("entretienForm")?.addEventListener("submit", async e => {

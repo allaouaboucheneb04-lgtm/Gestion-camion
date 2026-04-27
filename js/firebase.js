@@ -223,6 +223,19 @@ export async function getEntretiens() {
   return listRecords("entretien");
 }
 
+export async function addAlerteEntretien(data) {
+  return addRecord("alertes_entretien", data);
+}
+export async function updateAlerteEntretien(id, data) {
+  return updateRecord("alertes_entretien", id, data);
+}
+export async function deleteAlerteEntretien(id) {
+  return deleteRecord("alertes_entretien", id);
+}
+export async function getAlertesEntretien() {
+  return listRecords("alertes_entretien");
+}
+
 export async function addDepense(data) {
   return addRecord("depenses", data);
 }

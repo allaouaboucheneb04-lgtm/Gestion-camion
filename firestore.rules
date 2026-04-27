@@ -69,6 +69,11 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /alertes_entretien/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /depenses/{id} {
       allow read: if signedIn();
       allow create, update, delete: if isAdmin();
