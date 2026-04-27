@@ -294,3 +294,19 @@ Dans `users/{uid}` :
 ```
 
 Pour désactiver, l'app met `status: "inactif"` dans `chauffeurs/{id}` et `users/{uid}`.
+
+## Option modifier mot de passe chauffeur
+
+Cette version ajoute une option simple sans Cloud Function :
+
+- Dans Admin > Chauffeurs, bouton **Mot de passe** pour envoyer un email officiel Firebase de réinitialisation.
+- Sur la page de connexion, bouton **Mot de passe oublié / modifier**.
+- Le chauffeur reçoit un lien Firebase et choisit lui-même son nouveau mot de passe.
+
+À vérifier dans Firebase :
+
+1. Authentication > Sign-in method > Email/Password activé.
+2. Authentication > Templates > Password reset : personnaliser le message si besoin.
+3. Authentication > Settings > Authorized domains : ton domaine GitHub Pages doit être autorisé.
+
+Aucune règle Firestore spéciale n’est nécessaire pour changer le mot de passe, car Firebase Authentication gère l’email de reset.

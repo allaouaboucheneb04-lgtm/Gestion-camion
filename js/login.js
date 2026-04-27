@@ -1,4 +1,4 @@
-import { login, observeAuth, getUserProfile } from "./firebase.js";
+import { login, observeAuth, getUserProfile, sendPasswordReset } from "./firebase.js";
 
 const form = document.getElementById("loginForm");
 const message = document.getElementById("loginMessage");
@@ -40,3 +40,18 @@ form?.addEventListener("submit", async (e) => {
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js?v=final8").catch(() => {}));
 }
+
+const resetBtn = document.getElementById("resetPasswordBtn");
+resetBtn?.addEventListener("click", async () => {
+  const email = document.getElementById("email")?.value?.trim()?.toLowerCase();
+  if (!email) {
+    message.textContent = "Entre ton email d’abord, puis clique sur Mot de passe oublié.";
+    return;
+  }
+  try {
+    await sendPasswordReset(email);
+    message.textContent = "Lien de réinitialisation envoyé. Vérifie ta boîte email.";
+  } catch (err) {
+    message.textContent = err.message || "Erreur réinitialisation mot de passe";
+  }
+});

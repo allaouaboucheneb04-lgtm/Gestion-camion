@@ -1,7 +1,7 @@
 import {
   addCamion, updateCamion, deleteCamion, getCamions,
   addChauffeur, updateChauffeur, deleteChauffeur, getChauffeurs,
-  inviteDriverAccount, createDriverAuthAccount, saveUserProfile,
+  inviteDriverAccount, createDriverAuthAccount, saveUserProfile, sendPasswordReset,
   addVoyage, updateVoyage, deleteVoyage, getVoyages,
   addEntretien, updateEntretien, deleteEntretien, getEntretiens,
   addDepense, updateDepense, deleteDepense, getDepenses,
@@ -155,6 +155,7 @@ function chauffeurDetailsHtml(chauffeur) {
           <h2>Détails chauffeur : ${escapeHtml(chauffeur.nom || "-")}</h2>
           <p class="muted">Profil, invitation, voyages et performance</p>
         </div>
+        <button class="btn secondary" data-reset-password="${chauffeur.id}">Réinitialiser mot de passe</button>
         <button class="btn secondary" data-close-chauffeur-details>Fermer</button>
       </div>
 
@@ -290,6 +291,7 @@ function chauffeursHtml() {
             <div class="actions">
               <button class="btn primary" data-detail-chauffeur="${c.id}">Détails</button>
               <button class="btn secondary" data-edit-chauffeur="${c.id}">Modifier</button>
+              <button class="btn secondary" data-reset-password="${c.id}">Mot de passe</button>
               ${isInactive ? `<button class="btn success" data-enable-chauffeur="${c.id}">Réactiver</button>` : `<button class="btn danger" data-disable-chauffeur="${c.id}">Désactiver</button>`}
             </div>
           </div>`;
@@ -553,6 +555,20 @@ function bindActions() {
       setActiveView("chauffeurs");
     } catch (error) {
       displayError(error, "Réactivation chauffeur");
+    }
+  }));
+
+  document.querySelectorAll("[data-reset-password]").forEach(btn => btn.addEventListener("click", async () => {
+    const chauffeur = pickForEdit(state.chauffeurs, btn.dataset.resetPassword);
+    if (!chauffeur) return;
+    const email = (chauffeur.email || chauffeur.invitedEmail || "").trim().toLowerCase();
+    if (!email) return alert("Ce chauffeur n’a pas d’email enregistré.");
+    if (!confirm(`Envoyer un lien de réinitialisation de mot de passe à ${email} ?`)) return;
+    try {
+      await sendPasswordReset(email);
+      alert("Lien de réinitialisation envoyé ✅\nLe chauffeur doit ouvrir son email et choisir un nouveau mot de passe.");
+    } catch (error) {
+      displayError(error, "Réinitialisation mot de passe");
     }
   }));
 

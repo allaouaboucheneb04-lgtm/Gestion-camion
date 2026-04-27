@@ -4,7 +4,8 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore,
@@ -55,6 +56,12 @@ export function observeAuth(callback) {
 }
 export function currentUser() {
   return auth.currentUser;
+}
+
+export async function sendPasswordReset(email) {
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  if (!cleanEmail) throw new Error("Email obligatoire pour réinitialiser le mot de passe.");
+  return sendPasswordResetEmail(auth, cleanEmail);
 }
 
 // Users
