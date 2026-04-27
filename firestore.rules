@@ -1,133 +1,96 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    function userDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-
-    function userExists() {
-      return signedIn() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-
-    function myRole() {
-      return userExists() ? userDoc().data.role : null;
-    }
-
-    function isAdmin() {
-      return signedIn() && myRole() == "admin";
-    }
-
-    function isDriver() {
-      return signedIn() && myRole() == "chauffeur";
-    }
-
-    function isSelf(uid) {
-      return signedIn() && request.auth.uid == uid;
-    }
-
-    function isNonEmptyString(v) {
-      return v is string && v.size() > 0;
-    }
-
-    function isNumberField(field) {
-      return !(field in request.resource.data) ||
-        request.resource.data[field] is int ||
-        request.resource.data[field] is float;
-    }
-
-    function isTimestampField(field) {
-      return !(field in request.resource.data) ||
-        request.resource.data[field] is timestamp;
-    }
+    function signedIn() { return request.auth != null; }
+    function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function userExists() { return signedIn() && exists(userPath()); }
+    function myRole() { return userExists() ? get(userPath()).data.role : null; }
+    function isAdmin() { return signedIn() && myRole() == "admin"; }
+    function isManager() { return signedIn() && myRole() == "manager"; }
+    function isStaff() { return isAdmin() || isManager(); }
+    function isDriver() { return signedIn() && myRole() == "chauffeur"; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function nonEmptyString(v) { return v is string && v.size() > 0; }
+    function optString(f) { return !(f in request.resource.data) || request.resource.data[f] is string; }
+    function optNumber(f) { return !(f in request.resource.data) || request.resource.data[f] is int || request.resource.data[f] is float; }
+    function optTimestamp(f) { return !(f in request.resource.data) || request.resource.data[f] is timestamp; }
+    function optBool(f) { return !(f in request.resource.data) || request.resource.data[f] is bool; }
 
     match /users/{userId} {
-      allow read: if isAdmin() || isSelf(userId);
-      allow create: if isAdmin();
-      allow update: if isAdmin() || (
+      allow read: if isStaff() || isSelf(userId);
+      allow create: if isAdmin() || (
         isSelf(userId) &&
-        request.resource.data.role == resource.data.role &&
-        request.resource.data.email == resource.data.email
+        request.resource.data.role == "chauffeur" &&
+        request.resource.data.invited == true &&
+        request.resource.data.inviteId is string &&
+        exists(/databases/$(database)/documents/invitations/$(request.resource.data.inviteId)) &&
+        get(/databases/$(database)/documents/invitations/$(request.resource.data.inviteId)).data.emailLower == request.resource.data.email &&
+        get(/databases/$(database)/documents/invitations/$(request.resource.data.inviteId)).data.used == false
+      );
+      allow update: if isAdmin() || (isSelf(userId) && request.resource.data.role == resource.data.role && request.resource.data.email == resource.data.email);
+      allow delete: if isAdmin();
+    }
+
+    match /invitations/{inviteId} {
+      allow get: if true;
+      allow list: if isStaff();
+      allow create: if isStaff() &&
+        request.resource.data.role == "chauffeur" &&
+        nonEmptyString(request.resource.data.emailLower) &&
+        request.resource.data.used == false;
+      allow update: if isStaff() || (
+        signedIn() &&
+        resource.data.used == false &&
+        request.resource.data.used == true &&
+        request.resource.data.status == "accepted" &&
+        request.resource.data.acceptedBy == request.auth.uid
       );
       allow delete: if isAdmin();
     }
 
-    match /camions/{camionId} {
+    match /camions/{id} {
       allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isStaff();
     }
 
-    match /chauffeurs/{chauffeurId} {
-      allow read: if isAdmin() || (isDriver() && resource.data.userId == request.auth.uid);
-
-      allow create, update: if isAdmin() &&
-        request.resource.data.keys().hasOnly([
-          "userId",
-          "nom",
-          "numeroChauffeur",
-          "numeroPermis",
-          "adresse",
-          "telephone",
-          "kilometrageApres10Voyages",
-          "documentUrl",
-          "invitedEmail",
-          "statutInvitation",
-          "createdAt",
-          "updatedAt"
-        ]) &&
-        request.resource.data.userId is string &&
-        request.resource.data.nom is string &&
-        (!("numeroChauffeur" in request.resource.data) || request.resource.data.numeroChauffeur is string) &&
-        (!("numeroPermis" in request.resource.data) || request.resource.data.numeroPermis is string) &&
-        (!("adresse" in request.resource.data) || request.resource.data.adresse is string) &&
-        (!("telephone" in request.resource.data) || request.resource.data.telephone is string) &&
-        (!("kilometrageApres10Voyages" in request.resource.data) ||
-          request.resource.data.kilometrageApres10Voyages is int ||
-          request.resource.data.kilometrageApres10Voyages is float) &&
-        (!("documentUrl" in request.resource.data) || request.resource.data.documentUrl is string) &&
-        isTimestampField("createdAt") &&
-        isTimestampField("updatedAt");
-
+    match /chauffeurs/{id} {
+      allow read: if isStaff() || (isDriver() && resource.data.userId == request.auth.uid);
+      allow create: if isStaff();
+      allow update: if isStaff() || (
+        signedIn() &&
+        resource.data.inviteId is string &&
+        exists(/databases/$(database)/documents/invitations/$(resource.data.inviteId)) &&
+        get(/databases/$(database)/documents/invitations/$(resource.data.inviteId)).data.used == false &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.uid == request.auth.uid
+      );
       allow delete: if isAdmin();
     }
 
-    match /voyages/{voyageId} {
-      allow read: if isAdmin() ||
-        (isDriver() && resource.data.chauffeurId == request.auth.uid);
-
-      allow create: if isAdmin() ||
-        (isDriver() &&
-         request.resource.data.chauffeurId == request.auth.uid);
-
-      allow update: if isAdmin() ||
-        (isDriver() &&
-         resource.data.chauffeurId == request.auth.uid &&
-         request.resource.data.chauffeurId == request.auth.uid &&
-         request.resource.data.createdBy == resource.data.createdBy &&
-         request.resource.data.createdAt == resource.data.createdAt);
-
-      allow delete: if isAdmin() ||
-        (isDriver() && resource.data.chauffeurId == request.auth.uid);
+    match /voyages/{id} {
+      allow read: if isStaff() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
+      allow create: if isStaff() || (isDriver() && request.resource.data.chauffeurId == request.auth.uid);
+      allow update: if isStaff() || (isDriver() && resource.data.chauffeurId == request.auth.uid && request.resource.data.chauffeurId == request.auth.uid);
+      allow delete: if isStaff() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
     }
 
-    match /entretien/{entretienId} {
+    match /entretien/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if isStaff();
+    }
+
+    match /depenses/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if isStaff();
+    }
+
+    match /parametres/{id} {
       allow read: if signedIn();
       allow create, update, delete: if isAdmin();
     }
 
-    match /depenses/{depenseId} {
-      allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
-    }
-
-    match /parametres/{docId} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
+    match /mail/{id} {
+      allow read, write: if false;
     }
   }
 }

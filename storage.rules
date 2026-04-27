@@ -54,6 +54,10 @@ service firebase.storage {
          firestore.get(/databases/(default)/documents/voyages/$(voyageId)).data.chauffeurId == request.auth.uid);
     }
 
+    match /chauffeurs/invitations/{chauffeurDocId}/{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+
     match /chauffeurs/{uid}/{allPaths=**} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow write: if isAdmin() || (signedIn() && request.auth.uid == uid);

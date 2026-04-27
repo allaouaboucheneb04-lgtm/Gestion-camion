@@ -1,7 +1,7 @@
 import {
   addCamion, updateCamion, deleteCamion, getCamions,
   addChauffeur, updateChauffeur, deleteChauffeur, getChauffeurs,
-  inviteDriverAccount,
+  createDriverInvitation,
   addVoyage, updateVoyage, deleteVoyage, getVoyages,
   addEntretien, updateEntretien, deleteEntretien, getEntretiens,
   addDepense, updateDepense, deleteDepense, getDepenses,
@@ -211,7 +211,7 @@ function chauffeurDetailsHtml(chauffeur) {
 function chauffeursHtml() {
   return `
     <div class="card">
-      <div class="card-header"><div><h2>Ajouter un chauffeur</h2><p class="muted">Créer le compte chauffeur et envoyer une invitation email</p></div></div>
+      <div class="card-header"><div><h2>Ajouter un chauffeur</h2><p class="muted">Méthode comme Garage: créer une invitation, puis envoyer le lien au chauffeur manuellement.</p></div></div>
       <form id="chauffeurForm" class="form-grid">
         <label><span>Email du chauffeur</span><input name="email" type="email" required></label>
         <label><span>Nom du chauffeur</span><input name="nom" required></label>
@@ -221,7 +221,7 @@ function chauffeursHtml() {
         <label><span>Kilométrage après chèque 10 voyages</span><input name="kilometrageApres10Voyages" type="number" step="0.01"></label>
         <label class="full"><span>Adresse</span><textarea name="adresse"></textarea></label>
         <label class="full"><span>Permis / document (optionnel)</span><input type="file" name="profilFile" accept="image/*,.pdf"></label>
-        <button class="btn primary full" type="submit">Enregistrer le chauffeur</button>
+        <button class="btn primary full" type="submit">Créer invitation chauffeur</button>
       </form>
     </div>
 
@@ -232,8 +232,9 @@ function chauffeursHtml() {
           <div class="item-card">
             <h4>${escapeHtml(c.nom || "-")}</h4>
             <p>UID : ${escapeHtml(c.userId || "-")}</p>
-            <p>Email invitation : ${escapeHtml(c.invitedEmail || "-")}</p>
-            <p>Statut invitation : ${escapeHtml(c.statutInvitation || "-")}</p>
+            <p>Email invitation : ${escapeHtml(c.invitedEmail || c.invitationEmail || c.email || "-")}</p>
+            <p>Statut invitation : ${escapeHtml(c.statutInvitation || c.invitationStatus || "-")}</p>
+            ${c.inviteId && (c.invitationStatus || c.statutInvitation) !== "acceptée" ? `<p><strong>Lien invitation :</strong><br><input class="copy-input" readonly value="${location.origin}${location.pathname.replace('/pages/admin.html','')}/register.html?invite=${c.inviteId}"></p>` : ""}
             <p>Numéro chauffeur : ${escapeHtml(c.numeroChauffeur || "-")}</p>
             <p>Permis : ${escapeHtml(c.numeroPermis || "-")}</p>
             <p>Adresse : ${escapeHtml(c.adresse || "-")}</p>
@@ -561,30 +562,31 @@ function bindForms() {
     try {
       if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.textContent = "Création + invitation en cours...";
+        submitBtn.textContent = "Création invitation...";
       }
 
-      const result = await inviteDriverAccount(data);
+      const result = await createDriverInvitation(data);
 
-      if (!result?.uid || !result?.chauffeurDocId) {
-        throw new Error("Invitation créée mais la fonction n’a pas retourné uid/chauffeurDocId. Redéploie functions/index.js.");
+      if (!result?.inviteId || !result?.chauffeurDocId) {
+        throw new Error("Invitation non créée. Vérifie les rules Firestore pour invitations/chauffeurs.");
       }
 
       if (file) {
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
-        const url = await uploadFile(`chauffeurs/${result.uid}/${Date.now()}-${safeName}`, file);
+        const url = await uploadFile(`chauffeurs/invitations/${result.chauffeurDocId}/${Date.now()}-${safeName}`, file);
         await updateChauffeur(result.chauffeurDocId, { documentUrl: url });
       }
 
       form.reset();
       await refreshData();
-      alert(`Chauffeur créé ✅\nInvitation envoyée à: ${result.email}`);
+      const link = `${location.origin}${location.pathname.replace('/pages/admin.html','')}/register.html?invite=${result.inviteId}`;
+      prompt("Invitation créée ✅ Copie ce lien et envoie-le au chauffeur par SMS/WhatsApp/email:", link);
     } catch (error) {
       displayError(error, "Création chauffeur");
     } finally {
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.textContent = "Enregistrer le chauffeur";
+        submitBtn.textContent = "Créer invitation chauffeur";
       }
     }
   });

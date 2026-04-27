@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Créer mon compte chauffeur</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="login-body">
+  <main class="login-card">
+    <div class="brand-pill">🚚 Gestion Camion Pro</div>
+    <h1>Créer mon mot de passe</h1>
+    <p class="muted" id="inviteInfo">Chargement de l’invitation...</p>
+    <form id="registerForm" class="form-grid">
+      <label class="full"><span>Email</span><input id="email" type="email" readonly></label>
+      <label class="full"><span>Mot de passe</span><input id="password" type="password" minlength="6" required placeholder="Minimum 6 caractères"></label>
+      <label class="full"><span>Confirmer mot de passe</span><input id="password2" type="password" minlength="6" required></label>
+      <button class="btn primary full" type="submit">Créer mon compte chauffeur</button>
+    </form>
+    <p class="muted">Après création, tu seras redirigé vers l’espace chauffeur.</p>
+  </main>
+  <script type="module" src="js/register.js"></script>
+</body>
+</html>

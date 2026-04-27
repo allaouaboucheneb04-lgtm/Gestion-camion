@@ -2,6 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import {
   getAuth,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -45,6 +46,9 @@ function withTimestamp(data, isUpdate = false) {
 // Auth
 export async function login(email, password) {
   return signInWithEmailAndPassword(auth, email, password);
+}
+export async function registerEmailPassword(email, password) {
+  return createUserWithEmailAndPassword(auth, email, password);
 }
 export async function logout() {
   return signOut(auth);
@@ -105,10 +109,70 @@ export async function listWhere(colName, field, op, value, orderField = "created
 }
 
 
-export async function inviteDriverAccount(data) {
-  const callInviteDriver = httpsCallable(functions, "inviteDriver");
-  const result = await callInviteDriver(data);
-  return result.data;
+// Invitations style Garage: no Cloud Functions, no Trigger Email.
+export async function createDriverInvitation(data) {
+  const chauffeurRef = await addRecord("chauffeurs", {
+    userId: "",
+    uid: "",
+    nom: data.nom || "",
+    email: data.email || "",
+    invitationEmail: data.email || "",
+    invitedEmail: data.email || "",
+    numeroChauffeur: data.numeroChauffeur || "",
+    numeroPermis: data.numeroPermis || "",
+    adresse: data.adresse || "",
+    telephone: data.telephone || "",
+    kilometrageApres10Voyages: data.kilometrageApres10Voyages || 0,
+    invitationStatus: "en_attente",
+    statutInvitation: "en_attente",
+    status: "invité"
+  });
+  const inviteRef = await addRecord("invitations", {
+    role: "chauffeur",
+    email: data.email || "",
+    emailLower: (data.email || "").trim().toLowerCase(),
+    nom: data.nom || "",
+    chauffeurDocId: chauffeurRef.id,
+    status: "pending",
+    used: false
+  });
+  await updateRecord("chauffeurs", chauffeurRef.id, { inviteId: inviteRef.id });
+  return { inviteId: inviteRef.id, chauffeurDocId: chauffeurRef.id, email: data.email };
+}
+
+export async function getInvitation(inviteId) {
+  const snap = await getDoc(doc(db, "invitations", inviteId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function acceptDriverInvitation(invite, uid) {
+  const email = (invite.email || invite.emailLower || "").trim().toLowerCase();
+  await setDoc(doc(db, "users", uid), withTimestamp({
+    name: invite.nom || email,
+    email,
+    role: "chauffeur",
+    status: "actif",
+    invited: true,
+    invitationStatus: "acceptée",
+    inviteId: invite.id
+  }), { merge: true });
+  if (invite.chauffeurDocId) {
+    await updateDoc(doc(db, "chauffeurs", invite.chauffeurDocId), withTimestamp({
+      userId: uid,
+      uid,
+      email,
+      invitationEmail: email,
+      invitedEmail: email,
+      invitationStatus: "acceptée",
+      statutInvitation: "acceptée",
+      status: "actif"
+    }, true));
+  }
+  await updateDoc(doc(db, "invitations", invite.id), withTimestamp({
+    used: true,
+    status: "accepted",
+    acceptedBy: uid
+  }, true));
 }
 
 // Business helpers
