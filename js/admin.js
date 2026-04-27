@@ -451,6 +451,92 @@ function depensesHtml() {
   `;
 }
 
+
+function kmNumber(record) {
+  return Number(record?.kilometrage ?? record?.km ?? record?.odometre ?? 0) || 0;
+}
+
+function dateMillis(value) {
+  if (!value) return 0;
+  if (typeof value?.toMillis === "function") return value.toMillis();
+  if (typeof value?.toDate === "function") return value.toDate().getTime();
+  const t = new Date(value).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function dateLabel(value) {
+  if (!value) return "-";
+  try {
+    const d = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
+    if (Number.isNaN(d.getTime())) return "-";
+    return d.toLocaleDateString("fr-CA");
+  } catch { return "-"; }
+}
+
+function chauffeurName(uid) {
+  const c = state.chauffeurs.find(x => (x.userId || x.uid) === uid);
+  return c?.nom || uid || "-";
+}
+
+function camionName(id) {
+  const c = state.camions.find(x => x.id === id);
+  return c ? `${c.numeroCamion || "Camion"} ${c.marqueModele ? "- " + c.marqueModele : ""}` : (id || "Non assigné");
+}
+
+function buildKmStats(groupField) {
+  const map = new Map();
+  for (const r of state.odometres) {
+    const key = r[groupField] || "non-assigne";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(r);
+  }
+  return [...map.entries()].map(([key, rows]) => {
+    const sorted = [...rows].sort((a,b) => dateMillis(a.date || a.createdAt) - dateMillis(b.date || b.createdAt));
+    const kms = sorted.map(kmNumber).filter(n => n > 0);
+    const firstKm = kms.length ? kms[0] : 0;
+    const lastKm = kms.length ? kms[kms.length - 1] : 0;
+    const distance = Math.max(0, lastKm - firstKm);
+    const last = sorted[sorted.length - 1] || {};
+    const daysSince = dateMillis(last.date || last.createdAt) ? Math.floor((Date.now() - dateMillis(last.date || last.createdAt)) / 86400000) : null;
+    return { key, rows: sorted, count: rows.length, firstKm, lastKm, distance, last, daysSince };
+  }).sort((a,b) => b.distance - a.distance);
+}
+
+function statsKmHtml() {
+  const totalEntries = state.odometres.length;
+  const totalDistance = buildKmStats("camionId").reduce((sum, x) => sum + x.distance, 0);
+  const activeDrivers = new Set(state.odometres.map(x => x.chauffeurId).filter(Boolean)).size;
+  const activeTrucks = new Set(state.odometres.map(x => x.camionId).filter(Boolean)).size;
+  const byCamion = buildKmStats("camionId");
+  const byChauffeur = buildKmStats("chauffeurId");
+  const recent = [...state.odometres].sort((a,b) => dateMillis(b.date || b.createdAt) - dateMillis(a.date || a.createdAt)).slice(0, 20);
+  const alerts = byCamion.filter(x => x.daysSince !== null && x.daysSince >= 2);
+
+  return `
+    <div class="km-hero card">
+      <div><p class="eyebrow">Stats KM Pro</p><h2>Contrôle kilométrage camions</h2><p class="muted">Suivi par camion, chauffeur, dernier relevé et alertes de saisie.</p></div>
+      <div class="driver-mini-stats"><div><strong>${totalEntries}</strong><span>Relevés</span></div><div><strong>${activeTrucks}</strong><span>Camions</span></div><div><strong>${activeDrivers}</strong><span>Chauffeurs</span></div></div>
+    </div>
+    <div class="stats-grid">
+      <div class="card stat-card"><div class="label">Distance estimée</div><div class="value">${totalDistance.toLocaleString("fr-CA")} km</div></div>
+      <div class="card stat-card"><div class="label">Derniers relevés</div><div class="value">${recent.length}</div></div>
+      <div class="card stat-card"><div class="label">Alertes KM</div><div class="value">${alerts.length}</div></div>
+      <div class="card stat-card"><div class="label">Moyenne/camion</div><div class="value">${activeTrucks ? Math.round(totalDistance / activeTrucks).toLocaleString("fr-CA") : 0} km</div></div>
+    </div>
+    <div class="card"><div class="card-header"><div><h2>Par camion</h2><p class="muted">Distance = dernier KM - premier KM enregistré.</p></div></div><div class="list">
+      ${byCamion.length ? byCamion.map(x => `<div class="item-card km-row"><div><h4>${escapeHtml(camionName(x.key))}</h4><p>Premier KM : ${x.firstKm.toLocaleString("fr-CA")} · Dernier KM : ${x.lastKm.toLocaleString("fr-CA")}</p><p>Dernier relevé : ${dateLabel(x.last.date || x.last.createdAt)} par ${escapeHtml(chauffeurName(x.last.chauffeurId))}</p></div><div class="driver-score"><strong>${x.distance.toLocaleString("fr-CA")}</strong><span>km</span></div></div>`).join("") : `<div class="item-card"><p>Aucun relevé KM.</p></div>`}
+    </div></div>
+    <div class="card"><div class="card-header"><div><h2>Par chauffeur</h2><p class="muted">Performance kilométrage par chauffeur.</p></div></div><div class="list">
+      ${byChauffeur.length ? byChauffeur.map(x => `<div class="item-card km-row"><div><h4>${escapeHtml(chauffeurName(x.key))}</h4><p>Relevés : ${x.count} · Dernier KM : ${x.lastKm.toLocaleString("fr-CA")}</p><p>Dernier camion : ${escapeHtml(camionName(x.last.camionId))} · ${dateLabel(x.last.date || x.last.createdAt)}</p></div><div class="driver-score"><strong>${x.distance.toLocaleString("fr-CA")}</strong><span>km</span></div></div>`).join("") : `<div class="item-card"><p>Aucun relevé chauffeur.</p></div>`}
+    </div></div>
+    <div class="card"><div class="card-header"><div><h2>Alertes de suivi</h2><p class="muted">Camions sans relevé depuis 2 jours ou plus.</p></div></div><div class="list">
+      ${alerts.length ? alerts.map(x => `<div class="item-card alert-card"><h4>⚠️ ${escapeHtml(camionName(x.key))}</h4><p>Dernier relevé il y a ${x.daysSince} jour(s) · Dernier KM ${x.lastKm.toLocaleString("fr-CA")}</p></div>`).join("") : `<div class="item-card"><p>Aucune alerte. Les relevés KM sont à jour.</p></div>`}
+    </div></div>
+    <div class="card"><div class="card-header"><div><h2>Historique récent</h2><p class="muted">20 derniers relevés KM.</p></div></div><div class="list">
+      ${recent.length ? recent.map(r => `<div class="item-card km-row"><div><h4>${kmNumber(r).toLocaleString("fr-CA")} km</h4><p>${escapeHtml(chauffeurName(r.chauffeurId))} · ${escapeHtml(camionName(r.camionId))}</p><p>${dateLabel(r.date || r.createdAt)} ${r.note ? "· " + escapeHtml(r.note) : ""}</p></div></div>`).join("") : `<div class="item-card"><p>Aucun historique.</p></div>`}
+    </div></div>`;
+}
+
 function parametresHtml() {
   return `
     <div class="card">
@@ -477,6 +563,8 @@ function render() {
   document.getElementById("voyagesView").innerHTML = voyagesHtml();
   document.getElementById("entretienView").innerHTML = entretienHtml();
   document.getElementById("depensesView").innerHTML = depensesHtml();
+  const statsView = document.getElementById("statskmView");
+  if (statsView) statsView.innerHTML = statsKmHtml();
   document.getElementById("parametresView").innerHTML = parametresHtml();
   bindForms();
   bindActions();

@@ -72,3 +72,9 @@ Utilise ces variables dans le modèle EmailJS :
 3. Entre le KM avec photo : doit enregistrer + envoyer email.
 
 Si EmailJS n'est pas configuré, le KM sera quand même enregistré, mais l'email ne partira pas.
+
+## Stats KM Pro
+- Admin > Stats KM affiche les statistiques par camion et chauffeur.
+- Collection principale utilisée: `odometres`.
+- Les rules autorisent la lecture des relevés KM aux utilisateurs connectés pour éviter le blocage dashboard.
+- Publie `firestore.rules`, remplace les fichiers, puis recharge avec `?v=statskm1`.

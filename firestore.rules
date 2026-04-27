@@ -28,8 +28,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAdmin() || isSelf(userId);
-      allow create: if isAdmin() || isSelf(userId);
-      allow update: if isAdmin() || isSelf(userId);
+      allow create, update: if isAdmin() || isSelf(userId);
       allow delete: if false;
     }
 
@@ -51,17 +50,15 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
     }
 
-    // Nom utilisé par le projet actuel
     match /odometres/{id} {
-      allow read: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
+      allow read: if signedIn();
       allow create: if isAdmin() || (isDriver() && request.resource.data.chauffeurId == request.auth.uid);
       allow update: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid && request.resource.data.chauffeurId == request.auth.uid);
       allow delete: if isAdmin();
     }
 
-    // Ancien nom accepté aussi pour éviter les blocages si une page l'utilise encore
     match /km_journalier/{id} {
-      allow read: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
+      allow read: if signedIn();
       allow create: if isAdmin() || (isDriver() && request.resource.data.chauffeurId == request.auth.uid);
       allow update: if isAdmin();
       allow delete: if isAdmin();

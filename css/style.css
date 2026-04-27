@@ -394,3 +394,26 @@ html[dir="rtl"] .btn.primary:hover {
 .odometer-list h3 { margin: 18px 0 10px; }
 .odometer-item { border-left: 5px solid #2563eb; }
 html[dir="rtl"] .odometer-item { border-left: 0; border-right: 5px solid #2563eb; text-align: right; }
+
+/* Stats KM Pro */
+.km-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  background: linear-gradient(135deg, rgba(37,99,235,.12), rgba(16,185,129,.10));
+}
+.km-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.alert-card {
+  border-color: rgba(245, 158, 11, .45);
+  background: rgba(245, 158, 11, .08);
+}
+html[dir="rtl"] .km-row { text-align: right; }
+@media (max-width: 720px) {
+  .km-hero, .km-row { flex-direction: column; align-items: stretch; }
+}
