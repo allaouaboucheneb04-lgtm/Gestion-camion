@@ -124,3 +124,15 @@ Exemples :
 - Contrôle freins — 20000 km
 
 Ces alertes s’appliquent automatiquement à chaque camion. Le dashboard affiche un cercle de progression pour chaque camion et chaque type d’entretien. Le calcul utilise le dernier relevé KM du camion et le dernier entretien enregistré avec le même type.
+
+
+## Statut réparation / entretien
+
+Chaque entretien peut maintenant avoir un statut :
+
+- `en_attente` : En attente / قيد الانتظار
+- `en_cours` : En cours / جاري الإصلاح
+- `repare` : Réparé / تم الإصلاح
+
+Dans Admin > Entretien, l’admin peut cliquer sur **En attente**, **En cours** ou **Réparé**.
+Quand l’entretien passe à **Réparé**, l’application enregistre `dateReparation`. Si le KM entretien est vide, elle utilise le dernier KM connu du camion pour recalculer les alertes.

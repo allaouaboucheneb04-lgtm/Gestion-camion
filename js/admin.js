@@ -144,6 +144,25 @@ function entretienProgressCircle(item, compact = false) {
   </div>`;
 }
 
+function entretienStatusLabel(status) {
+  const v = status || 'en_attente';
+  if (v === 'repare') return 'Réparé';
+  if (v === 'en_cours') return 'En cours';
+  return 'En attente';
+}
+
+function entretienStatusArabic(status) {
+  const v = status || 'en_attente';
+  if (v === 'repare') return 'تم الإصلاح';
+  if (v === 'en_cours') return 'جاري الإصلاح';
+  return 'قيد الانتظار';
+}
+
+function entretienStatusPill(status) {
+  const v = status || 'en_attente';
+  return `<span class="status-pill repair ${v}">${entretienStatusLabel(v)} · ${entretienStatusArabic(v)}</span>`;
+}
+
 function entretienAlerts() {
   return buildEntretienSuivis()
     .map(e => ({ ...e, progress: entretienProgress(e) }))
@@ -513,13 +532,17 @@ function entretienHtml() {
       <div class="list">
         ${state.entretien.length ? state.entretien.map(e => `
           <div class="item-card">
-            <h4>${escapeHtml(e.type || "-")}</h4>
+            <h4>${escapeHtml(e.type || "-")} ${entretienStatusPill(e.status)}</h4>
             <p>Coût : ${money(e.cout)} | Date : ${formatDate(e.date)}</p>
+            ${e.dateReparation ? `<p>Réparé le : ${formatDate(e.dateReparation)}</p>` : ""}
             <p>Garage : ${escapeHtml(e.garage || "-")} | Remorque : ${e.remorque ? "Oui" : "Non"}</p>
             <p>Description : ${escapeHtml(e.description || "-")}</p>
             ${entretienProgressCircle(e, true)}
             ${e.documentUrl ? `<p><a href="${e.documentUrl}" target="_blank" rel="noopener">Voir la facture</a></p>` : ""}
             <div class="actions">
+              <button class="btn secondary" data-status-entretien="${e.id}" data-status-value="en_attente">En attente</button>
+              <button class="btn warning" data-status-entretien="${e.id}" data-status-value="en_cours">En cours</button>
+              <button class="btn success" data-status-entretien="${e.id}" data-status-value="repare">Réparé</button>
               <button class="btn secondary" data-edit-entretien="${e.id}">Modifier</button>
               <button class="btn danger" data-delete-entretien="${e.id}">Supprimer</button>
             </div>
@@ -948,6 +971,25 @@ function bindActions() {
     setActiveView("alertesEntretien");
   }));
 
+  document.querySelectorAll("[data-status-entretien]").forEach(btn => btn.addEventListener("click", async () => {
+    const item = pickForEdit(state.entretien, btn.dataset.statusEntretien);
+    const status = btn.dataset.statusValue;
+    const update = {
+      status,
+      updatedAt: new Date()
+    };
+    if (status === "repare") {
+      update.dateReparation = new Date();
+      if (!numberOrZero(item.kmEntretien) && item.camionId) {
+        const currentKm = lastKmForCamion(item.camionId);
+        if (currentKm) update.kmEntretien = currentKm;
+      }
+    }
+    await updateEntretien(item.id, update);
+    await refreshData();
+    setActiveView("entretien");
+  }));
+
   document.querySelectorAll("[data-delete-entretien]").forEach(btn => btn.addEventListener("click", async () => {
     if (!confirm("Supprimer cet entretien ?")) return;
     await deleteEntretien(btn.dataset.deleteEntretien);
@@ -955,7 +997,7 @@ function bindActions() {
   }));
   document.querySelectorAll("[data-edit-entretien]").forEach(btn => btn.addEventListener("click", async () => {
     const item = pickForEdit(state.entretien, btn.dataset.editEntretien);
-    const update = promptUpdate(item, ["type", "cout", "garage", "description"]);
+    const update = promptUpdate(item, ["type", "status", "cout", "garage", "description", "kmEntretien", "intervalKm"]);
     if (!update) return;
     await updateEntretien(item.id, update);
     await refreshData();
