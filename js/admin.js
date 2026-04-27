@@ -197,8 +197,8 @@ function chauffeurDetailsHtml(chauffeur) {
         <h4>Voyages de ce chauffeur</h4>
         ${voyages.length ? voyages.map(v => `
           <div class="item-card">
-            <h4>${escapeHtml(v.client || "-")} → ${escapeHtml(v.destination || "-")}</h4>
-            <p>Départ : ${formatDate(v.dateDepart)} | Arrivée : ${formatDate(v.dateArrivee)}</p>
+            <h4><span class="badge">${v.typeVoyage === "aller_retour" ? "Aller-retour" : "Aller simple"}</span> ${escapeHtml(v.depart || "-")} → ${escapeHtml(v.destination || "-")}</h4>
+            <p>Client aller : ${escapeHtml(v.client || "-")} | Départ : ${formatDate(v.dateDepart)} | Arrivée : ${formatDate(v.dateArrivee)}</p>
             <p>Prix aller : ${money(v.prixCourse)} | Retour : ${money(v.prixCourseRetour)}</p>
             <p>Gasoil : ${money(numberOrZero(v.gasoil) + numberOrZero(v.gasoilRetour))} | Frais mission : ${money(numberOrZero(v.fraisMission) + numberOrZero(v.fraisMissionRetour))}</p>
             ${voyageAdvancedLine(v)}
@@ -317,25 +317,35 @@ function voyagesHtml() {
     <div class="card">
       <div class="card-header"><div><h2>Ajouter un voyage</h2><p class="muted">Aller + retour + coûts</p></div></div>
       <form id="voyageForm" class="form-grid">
+        <label><span>Type de voyage</span><select name="typeVoyage" data-trip-type required><option value="simple">Aller simple</option><option value="aller_retour">Aller-retour</option></select></label>
         <label><span>Chauffeur (UID)</span><select name="chauffeurId" required><option value="">Choisir</option>${chauffeurOptions}</select></label>
         <label><span>Nom du chauffeur</span><input name="nomChauffeur" required></label>
         <label><span>Camion</span><select name="camionId"><option value="">Choisir</option>${camionOptions}</select></label>
-        <label><span>Client</span><input name="client" required></label>
-        <label><span>Destination</span><input name="destination" required></label>
+        <label><span>Client aller</span><input name="client" required></label>
+        <label><span>Départ aller</span><input name="depart" required></label>
+        <label><span>Destination aller</span><input name="destination" required></label>
         <label><span>Date de départ</span><input name="dateDepart" type="datetime-local"></label>
         <label><span>Date d'arrivée</span><input name="dateArrivee" type="datetime-local"></label>
-        <label><span>Prix de course</span><input name="prixCourse" type="number" step="0.01"></label>
-        <label><span>Gasoil</span><input name="gasoil" type="number" step="0.01"></label>
-        <label><span>Frais de mission</span><input name="fraisMission" type="number" step="0.01"></label>
+        <label><span>Prix de course aller</span><input name="prixCourse" type="number" step="0.01"></label>
+        <label><span>Gasoil aller</span><input name="gasoil" type="number" step="0.01"></label>
+        <label><span>Frais de mission aller</span><input name="fraisMission" type="number" step="0.01"></label>
         <label><span>Auteur dépenses</span><input name="auteurDepenses"></label>
 
-        <label><span>Client retour</span><input name="retourClient"></label>
-        <label><span>Destination retour</span><input name="retourDestination"></label>
-        <label><span>Date de retour</span><input name="dateRetour" type="datetime-local"></label>
-        <label><span>Date arrivée retour</span><input name="dateRetourArrivee" type="datetime-local"></label>
-        <label><span>Prix course retour</span><input name="prixCourseRetour" type="number" step="0.01"></label>
-        <label><span>Frais mission retour</span><input name="fraisMissionRetour" type="number" step="0.01"></label>
-        <label><span>Gasoil retour</span><input name="gasoilRetour" type="number" step="0.01"></label>
+        <div class="return-section full" data-return-section style="display:none;">
+          <div class="section-title">Retour indépendant</div>
+          <div class="form-grid nested-grid">
+            <label><span>Client retour</span><input name="retourClient"></label>
+            <label><span>Départ retour</span><input name="retourDepart"></label>
+            <label><span>Destination retour</span><input name="retourDestination"></label>
+            <label><span>Date de retour</span><input name="dateRetour" type="datetime-local"></label>
+            <label><span>Date arrivée retour</span><input name="dateRetourArrivee" type="datetime-local"></label>
+            <label><span>Prix course retour</span><input name="prixCourseRetour" type="number" step="0.01"></label>
+            <label><span>Frais mission retour</span><input name="fraisMissionRetour" type="number" step="0.01"></label>
+            <label><span>Gasoil retour</span><input name="gasoilRetour" type="number" step="0.01"></label>
+          </div>
+        </div>
+        <label><span>KM départ voyage</span><input name="kmDepart" type="number" step="1" min="0"></label>
+        <label><span>KM arrivée voyage</span><input name="kmArrivee" type="number" step="1" min="0"></label>
         <label class="full"><span>Document du voyage (optionnel)</span><input type="file" name="voyageFile" accept="image/*,.pdf"></label>
         <button class="btn primary full" type="submit">Enregistrer le voyage</button>
       </form>
@@ -346,12 +356,11 @@ function voyagesHtml() {
       <div class="list">
         ${state.voyages.length ? state.voyages.map(v => `
           <div class="item-card">
-            <h4>${escapeHtml(v.client || "-")} → ${escapeHtml(v.destination || "-")}</h4>
-            <p>Chauffeur : ${escapeHtml(v.nomChauffeur || v.chauffeurId || "-")}</p>
+            <h4><span class="badge">${v.typeVoyage === "aller_retour" ? "Aller-retour" : "Aller simple"}</span> ${escapeHtml(v.depart || "-")} → ${escapeHtml(v.destination || "-")}</h4>
+            <p>Client aller : ${escapeHtml(v.client || "-")} | Chauffeur : ${escapeHtml(v.nomChauffeur || v.chauffeurId || "-")}</p>
             <p>Départ : ${formatDate(v.dateDepart)} | Arrivée : ${formatDate(v.dateArrivee)}</p>
             <p>Prix : ${money(v.prixCourse)} | Gasoil : ${money(v.gasoil)} | Frais mission : ${money(v.fraisMission)}</p>
-            <p>Retour : ${escapeHtml(v.retourClient || "-")} → ${escapeHtml(v.retourDestination || "-")}</p>
-            <p>Prix retour : ${money(v.prixCourseRetour)} | Gasoil retour : ${money(v.gasoilRetour)} | Frais retour : ${money(v.fraisMissionRetour)}</p>
+            ${v.typeVoyage === "aller_retour" ? `<p>Retour : ${escapeHtml(v.retourDepart || "-")} → ${escapeHtml(v.retourDestination || "-")}</p><p>Client retour : ${escapeHtml(v.retourClient || "-")} | Prix retour : ${money(v.prixCourseRetour)} | Gasoil retour : ${money(v.gasoilRetour)} | Frais retour : ${money(v.fraisMissionRetour)}</p>` : `<p class="muted">Voyage aller simple</p>`}
             <p>KM départ : ${v.kmDepart || "-"} | KM arrivée : ${v.kmArrivee || "-"}</p>
             ${voyageAdvancedLine(v)}
             ${v.documentUrl ? `<p><a href="${v.documentUrl}" target="_blank" rel="noopener">Voir le document</a></p>` : ""}
@@ -740,7 +749,7 @@ function bindActions() {
   }));
   document.querySelectorAll("[data-edit-voyage]").forEach(btn => btn.addEventListener("click", async () => {
     const item = pickForEdit(state.voyages, btn.dataset.editVoyage);
-    const update = promptUpdate(item, ["client", "destination", "prixCourse", "gasoil", "fraisMission", "retourClient", "retourDestination", "prixCourseRetour", "gasoilRetour", "fraisMissionRetour", "kmDepart", "kmArrivee"]);
+    const update = promptUpdate(item, ["typeVoyage", "client", "depart", "destination", "prixCourse", "gasoil", "fraisMission", "retourClient", "retourDepart", "retourDestination", "prixCourseRetour", "gasoilRetour", "fraisMissionRetour", "kmDepart", "kmArrivee"]);
     if (!update) return;
     await updateVoyage(item.id, update);
     await refreshData();
@@ -773,7 +782,18 @@ function bindActions() {
   }));
 }
 
+function bindTripTypeToggle(root = document) {
+  root.querySelectorAll("[data-trip-type]").forEach(select => {
+    const form = select.closest("form");
+    const section = form?.querySelector("[data-return-section]");
+    const update = () => { if (section) section.style.display = select.value === "aller_retour" ? "block" : "none"; };
+    select.addEventListener("change", update);
+    update();
+  });
+}
+
 function bindForms() {
+  bindTripTypeToggle(document);
   document.getElementById("camionForm")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -859,6 +879,17 @@ function bindForms() {
     e.preventDefault();
     const form = e.currentTarget;
     const data = formToObject(form);
+    data.typeVoyage = data.typeVoyage || "simple";
+    if (data.typeVoyage !== "aller_retour") {
+      data.retourClient = "";
+      data.retourDepart = "";
+      data.retourDestination = "";
+      data.dateRetour = null;
+      data.dateRetourArrivee = null;
+      data.prixCourseRetour = 0;
+      data.fraisMissionRetour = 0;
+      data.gasoilRetour = 0;
+    }
     ["prixCourse","gasoil","fraisMission","prixCourseRetour","fraisMissionRetour","gasoilRetour","kmDepart","kmArrivee"].forEach(k => data[k] = numberOrZero(data[k]));
     ["dateDepart","dateArrivee","dateRetour","dateRetourArrivee"].forEach(k => data[k] = dateTimeOrNull(data[k]));
     const file = form.voyageFile.files[0];

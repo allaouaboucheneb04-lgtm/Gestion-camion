@@ -90,3 +90,15 @@ Si EmailJS n'est pas configuré, le KM sera quand même enregistré, mais l'emai
 - Nouvelle section Stats KM: rentabilité voyages + alertes relevés KM.
 
 Après upload, recharge avec `?v=kmpro2`.
+
+## Mise à jour C — Voyage aller simple / aller-retour
+
+Cette version inclut :
+- choix du type de voyage : `simple` ou `aller_retour`
+- départ aller séparé de destination aller
+- retour indépendant avec `retourDepart` et `retourDestination`
+- KM départ / KM arrivée pour calculer la distance
+- calculs de rentabilité : distance, consommation / 100 km, coût / km, bénéfice / km
+- alertes entretien dans Stats KM Pro
+
+Recharge conseillé : `?v=finalproC`

@@ -420,3 +420,23 @@ html[dir="rtl"] .km-row { text-align: right; }
 
 .km-advanced-line { margin-top: 8px; padding: 10px 12px; border-radius: 14px; background: #eef6ff; color: #0f172a; font-weight: 700; }
 html[dir="rtl"] .km-advanced-line { text-align: right; }
+
+/* Voyage aller simple / aller-retour */
+.return-section {
+  border: 1px solid var(--border, #d9e2ef);
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(37, 99, 235, 0.04);
+}
+.section-title {
+  font-weight: 900;
+  margin-bottom: 12px;
+  color: var(--text, #0f172a);
+}
+.nested-grid {
+  margin: 0;
+}
+html[dir="rtl"] .return-section,
+html[dir="rtl"] .section-title {
+  text-align: right;
+}
