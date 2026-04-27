@@ -78,3 +78,15 @@ Si EmailJS n'est pas configuré, le KM sera quand même enregistré, mais l'emai
 - Collection principale utilisée: `odometres`.
 - Les rules autorisent la lecture des relevés KM aux utilisateurs connectés pour éviter le blocage dashboard.
 - Publie `firestore.rules`, remplace les fichiers, puis recharge avec `?v=statskm1`.
+
+
+## Mise à jour KM Pro avancé
+
+- Suppression du champ inutile `kilométrage après chaque 10 voyages`.
+- Ajout de `KM départ voyage` et `KM arrivée voyage`.
+- Calcul automatique de la distance du voyage.
+- Calcul conso moyenne: gasoil / distance × 100.
+- Calcul coût/km et bénéfice/km.
+- Nouvelle section Stats KM: rentabilité voyages + alertes relevés KM.
+
+Après upload, recharge avec `?v=kmpro2`.

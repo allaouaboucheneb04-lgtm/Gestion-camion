@@ -13,10 +13,39 @@ const state = {
   odometres: []
 };
 
+function voyageRevenue(v) {
+  return numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour);
+}
+function voyageCosts(v) {
+  return numberOrZero(v.gasoil) + numberOrZero(v.fraisMission) + numberOrZero(v.gasoilRetour) + numberOrZero(v.fraisMissionRetour);
+}
+function voyageDistance(v) {
+  const d = numberOrZero(v.kmDepart);
+  const a = numberOrZero(v.kmArrivee);
+  return a > d ? a - d : 0;
+}
+function voyageProfit(v) {
+  return voyageRevenue(v) - voyageCosts(v);
+}
+function formatRatio(value, suffix) {
+  return Number.isFinite(value) && value > 0 ? value.toLocaleString("fr-CA", { maximumFractionDigits: 2 }) + suffix : "-";
+}
+function voyageAdvancedLine(v) {
+  const distance = voyageDistance(v);
+  const gasoil = numberOrZero(v.gasoil) + numberOrZero(v.gasoilRetour);
+  const couts = voyageCosts(v);
+  const profit = voyageProfit(v);
+  const conso = distance ? (gasoil / distance) * 100 : 0;
+  const coutKm = distance ? couts / distance : 0;
+  const profitKm = distance ? profit / distance : 0;
+  return `<p class="km-advanced-line">Distance : <strong>${distance ? distance.toLocaleString("fr-CA") + " km" : "-"}</strong> | Conso : ${formatRatio(conso, " /100 km")} | Coût/km : ${formatRatio(coutKm, " DA/km")} | Bénéfice/km : ${formatRatio(profitKm, " DA/km")}</p>`;
+}
+
 function dashboardHtml() {
-  const revenu = state.voyages.reduce((s, v) => s + numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour), 0);
-  const couts = state.voyages.reduce((s, v) => s + numberOrZero(v.gasoil) + numberOrZero(v.fraisMission) + numberOrZero(v.gasoilRetour) + numberOrZero(v.fraisMissionRetour), 0);
+  const revenu = state.voyages.reduce((s, v) => s + voyageRevenue(v), 0);
+  const couts = state.voyages.reduce((s, v) => s + voyageCosts(v), 0);
   const benefice = revenu - couts;
+  const distance = state.voyages.reduce((s, v) => s + voyageDistance(v), 0);
   const dernierKm = state.odometres.length ? state.odometres[0].kilometrage : 0;
 
   return `
@@ -25,6 +54,7 @@ function dashboardHtml() {
       <div class="card stat-card"><div class="label">Revenu</div><div class="value">${money(revenu)}</div></div>
       <div class="card stat-card"><div class="label">Coûts</div><div class="value">${money(couts)}</div></div>
       <div class="card stat-card"><div class="label">Bénéfice estimé</div><div class="value">${money(benefice)}</div></div>
+      <div class="card stat-card"><div class="label">Distance voyages</div><div class="value">${distance ? distance.toLocaleString("fr-CA") + " km" : "-"}</div></div>
       <div class="card stat-card"><div class="label">Dernier KM</div><div class="value">${dernierKm || "-"}</div></div>
     </div>
   `;
@@ -52,7 +82,8 @@ function formHtml() {
         <label><span>Prix course retour</span><input name="prixCourseRetour" type="number" step="0.01"></label>
         <label><span>Frais mission retour</span><input name="fraisMissionRetour" type="number" step="0.01"></label>
         <label><span>Gasoil retour</span><input name="gasoilRetour" type="number" step="0.01"></label>
-        <label><span>Kilométrage après chèque 10 voyages</span><input name="kilometrageApres10Voyages" type="number" step="0.01"></label>
+        <label><span>KM départ voyage</span><input name="kmDepart" type="number" step="1" min="0"></label>
+        <label><span>KM arrivée voyage</span><input name="kmArrivee" type="number" step="1" min="0"></label>
         <label class="full"><span>Document du voyage (optionnel)</span><input type="file" name="voyageFile" accept="image/*,.pdf"></label>
         <button class="btn primary full" type="submit">Ajouter le voyage</button>
       </form>
@@ -104,6 +135,8 @@ function tripsHtml() {
             <p>Prix : ${money(v.prixCourse)} | Gasoil : ${money(v.gasoil)} | Frais mission : ${money(v.fraisMission)}</p>
             <p>Retour : ${escapeHtml(v.retourClient || "-")} → ${escapeHtml(v.retourDestination || "-")}</p>
             <p>Prix retour : ${money(v.prixCourseRetour)} | Gasoil retour : ${money(v.gasoilRetour)} | Frais retour : ${money(v.fraisMissionRetour)}</p>
+            <p>KM départ : ${v.kmDepart || "-"} | KM arrivée : ${v.kmArrivee || "-"}</p>
+            ${voyageAdvancedLine(v)}
             ${v.documentUrl ? `<p><a href="${v.documentUrl}" target="_blank" rel="noopener">Voir le document</a></p>` : ""}
             <div class="actions">
               <button class="btn secondary" data-edit-voyage="${v.id}">Modifier</button>
@@ -260,7 +293,7 @@ function bindForm() {
     const form = e.currentTarget;
     const data = formToObject(form);
     data.chauffeurId = state.profile.id;
-    ["prixCourse","gasoil","fraisMission","prixCourseRetour","fraisMissionRetour","gasoilRetour","kilometrageApres10Voyages"].forEach(k => data[k] = numberOrZero(data[k]));
+    ["prixCourse","gasoil","fraisMission","prixCourseRetour","fraisMissionRetour","gasoilRetour","kmDepart","kmArrivee"].forEach(k => data[k] = numberOrZero(data[k]));
     ["dateDepart","dateArrivee","dateRetour","dateRetourArrivee"].forEach(k => data[k] = dateTimeOrNull(data[k]));
     const file = form.voyageFile.files[0];
     delete data.voyageFile;

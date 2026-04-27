@@ -62,8 +62,8 @@ function bindMenu() {
 }
 
 function dashboardHtml() {
-  const revenu = state.voyages.reduce((s, v) => s + numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour), 0);
-  const coutsVoyages = state.voyages.reduce((s, v) => s + numberOrZero(v.gasoil) + numberOrZero(v.fraisMission) + numberOrZero(v.gasoilRetour) + numberOrZero(v.fraisMissionRetour), 0);
+  const revenu = state.voyages.reduce((s, v) => s + voyageRevenue(v), 0);
+  const coutsVoyages = state.voyages.reduce((s, v) => s + voyageCosts(v), 0);
   const coutsEntretien = state.entretien.reduce((s, e) => s + numberOrZero(e.cout), 0);
   const autresDepenses = state.depenses.reduce((s, d) => s + numberOrZero(d.montant), 0);
   const benefice = revenu - coutsVoyages - coutsEntretien - autresDepenses;
@@ -146,8 +146,9 @@ function chauffeurDetailsHtml(chauffeur) {
   const voyages = state.voyages.filter(v => v.chauffeurId === uid);
   const depenses = state.depenses.filter(d => d.chauffeurId === uid || d.chauffeurId === chauffeur.id);
   const odometres = state.odometres.filter(o => o.chauffeurId === uid);
-  const revenu = voyages.reduce((s, v) => s + numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour), 0);
+  const revenu = voyages.reduce((s, v) => s + voyageRevenue(v), 0);
   const gasoil = voyages.reduce((s, v) => s + numberOrZero(v.gasoil) + numberOrZero(v.gasoilRetour), 0);
+  const distanceVoyages = voyages.reduce((s, v) => s + voyageDistance(v), 0);
   const fraisMission = voyages.reduce((s, v) => s + numberOrZero(v.fraisMission) + numberOrZero(v.fraisMissionRetour), 0);
   const autresDepenses = depenses.reduce((s, d) => s + numberOrZero(d.montant), 0);
   const net = revenu - gasoil - fraisMission - autresDepenses;
@@ -169,6 +170,7 @@ function chauffeurDetailsHtml(chauffeur) {
         <div class="card stat-card"><div class="label">Coûts</div><div class="value">${money(gasoil + fraisMission + autresDepenses)}</div></div>
         <div class="card stat-card"><div class="label">Net estimé</div><div class="value">${money(net)}</div></div>
         <div class="card stat-card"><div class="label">Dernier KM</div><div class="value">${odometres[0]?.kilometrage || "-"}</div></div>
+        <div class="card stat-card"><div class="label">Distance voyages</div><div class="value">${distanceVoyages ? distanceVoyages.toLocaleString("fr-CA") + " km" : "-"}</div></div>
       </div>
 
       <div class="grid detail-grid">
@@ -185,7 +187,6 @@ function chauffeurDetailsHtml(chauffeur) {
           <h4>Travail / permis</h4>
           <p><strong>Numéro chauffeur :</strong> ${escapeHtml(chauffeur.numeroChauffeur || "-")}</p>
           <p><strong>Numéro permis :</strong> ${escapeHtml(chauffeur.numeroPermis || "-")}</p>
-          <p><strong>Kilométrage après 10 voyages :</strong> ${escapeHtml(chauffeur.kilometrageApres10Voyages || "-")}</p>
           <p><strong>Statut invitation :</strong> ${escapeHtml(chauffeur.statutInvitation || "-")}</p>
           <p><strong>Créé le :</strong> ${fullDate(chauffeur.createdAt)}</p>
           ${chauffeur.documentUrl ? `<p><a href="${chauffeur.documentUrl}" target="_blank" rel="noopener">Voir permis / document</a></p>` : ""}
@@ -200,6 +201,7 @@ function chauffeurDetailsHtml(chauffeur) {
             <p>Départ : ${formatDate(v.dateDepart)} | Arrivée : ${formatDate(v.dateArrivee)}</p>
             <p>Prix aller : ${money(v.prixCourse)} | Retour : ${money(v.prixCourseRetour)}</p>
             <p>Gasoil : ${money(numberOrZero(v.gasoil) + numberOrZero(v.gasoilRetour))} | Frais mission : ${money(numberOrZero(v.fraisMission) + numberOrZero(v.fraisMissionRetour))}</p>
+            ${voyageAdvancedLine(v)}
             ${v.documentUrl ? `<p><a href="${v.documentUrl}" target="_blank" rel="noopener">Voir document voyage</a></p>` : ""}
           </div>
         `).join("") : `<p class="muted">Aucun voyage enregistré pour ce chauffeur.</p>`}
@@ -252,7 +254,6 @@ function chauffeursHtml() {
         <label><span>Numéro de chauffeur</span><input name="numeroChauffeur"></label>
         <label><span>Numéro de permis</span><input name="numeroPermis"></label>
         <label><span>Téléphone</span><input name="telephone"></label>
-        <label><span>Kilométrage après chèque 10 voyages</span><input name="kilometrageApres10Voyages" type="number" step="0.01"></label>
         <label><span>Statut</span><select name="status"><option value="actif">Actif</option><option value="inactif">Inactif</option></select></label>
         <label class="full"><span>Adresse</span><textarea name="adresse"></textarea></label>
         <label class="full"><span>Permis / document (optionnel)</span><input type="file" name="profilFile" accept="image/*,.pdf"></label>
@@ -275,7 +276,7 @@ function chauffeursHtml() {
           const isInactive = status === "inactif";
           const uid = c.userId || c.uid || "";
           const voyages = state.voyages.filter(v => v.chauffeurId === uid);
-          const revenu = voyages.reduce((sum, v) => sum + numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour), 0);
+          const revenu = voyages.reduce((sum, v) => sum + voyageRevenue(v), 0);
           const lastKm = state.odometres.find(o => o.chauffeurId === uid);
           return `
           <div class="item-card driver-card ${isInactive ? "is-inactive" : ""}">
@@ -335,7 +336,6 @@ function voyagesHtml() {
         <label><span>Prix course retour</span><input name="prixCourseRetour" type="number" step="0.01"></label>
         <label><span>Frais mission retour</span><input name="fraisMissionRetour" type="number" step="0.01"></label>
         <label><span>Gasoil retour</span><input name="gasoilRetour" type="number" step="0.01"></label>
-        <label><span>Kilométrage après chèque 10 voyages</span><input name="kilometrageApres10Voyages" type="number" step="0.01"></label>
         <label class="full"><span>Document du voyage (optionnel)</span><input type="file" name="voyageFile" accept="image/*,.pdf"></label>
         <button class="btn primary full" type="submit">Enregistrer le voyage</button>
       </form>
@@ -352,6 +352,8 @@ function voyagesHtml() {
             <p>Prix : ${money(v.prixCourse)} | Gasoil : ${money(v.gasoil)} | Frais mission : ${money(v.fraisMission)}</p>
             <p>Retour : ${escapeHtml(v.retourClient || "-")} → ${escapeHtml(v.retourDestination || "-")}</p>
             <p>Prix retour : ${money(v.prixCourseRetour)} | Gasoil retour : ${money(v.gasoilRetour)} | Frais retour : ${money(v.fraisMissionRetour)}</p>
+            <p>KM départ : ${v.kmDepart || "-"} | KM arrivée : ${v.kmArrivee || "-"}</p>
+            ${voyageAdvancedLine(v)}
             ${v.documentUrl ? `<p><a href="${v.documentUrl}" target="_blank" rel="noopener">Voir le document</a></p>` : ""}
             <div class="actions">
               <button class="btn secondary" data-edit-voyage="${v.id}">Modifier</button>
@@ -483,6 +485,34 @@ function camionName(id) {
   return c ? `${c.numeroCamion || "Camion"} ${c.marqueModele ? "- " + c.marqueModele : ""}` : (id || "Non assigné");
 }
 
+function voyageRevenue(v) {
+  return numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour);
+}
+function voyageCosts(v) {
+  return numberOrZero(v.gasoil) + numberOrZero(v.fraisMission) + numberOrZero(v.gasoilRetour) + numberOrZero(v.fraisMissionRetour);
+}
+function voyageDistance(v) {
+  const d = numberOrZero(v.kmDepart);
+  const a = numberOrZero(v.kmArrivee);
+  return a > d ? a - d : 0;
+}
+function voyageProfit(v) {
+  return voyageRevenue(v) - voyageCosts(v);
+}
+function ratio(value, suffix) {
+  return Number.isFinite(value) && value > 0 ? value.toLocaleString("fr-CA", { maximumFractionDigits: 2 }) + suffix : "-";
+}
+function voyageAdvancedLine(v) {
+  const distance = voyageDistance(v);
+  const gasoil = numberOrZero(v.gasoil) + numberOrZero(v.gasoilRetour);
+  const couts = voyageCosts(v);
+  const profit = voyageProfit(v);
+  const conso = distance ? (gasoil / distance) * 100 : 0;
+  const coutKm = distance ? couts / distance : 0;
+  const profitKm = distance ? profit / distance : 0;
+  return `<p class="km-advanced-line">Distance : <strong>${distance ? distance.toLocaleString("fr-CA") + " km" : "-"}</strong> · Conso : ${ratio(conso, " /100 km")} · Coût/km : ${ratio(coutKm, " DA/km")} · Bénéfice/km : ${ratio(profitKm, " DA/km")}</p>`;
+}
+
 function buildKmStats(groupField) {
   const map = new Map();
   for (const r of state.odometres) {
@@ -509,6 +539,11 @@ function statsKmHtml() {
   const activeTrucks = new Set(state.odometres.map(x => x.camionId).filter(Boolean)).size;
   const byCamion = buildKmStats("camionId");
   const byChauffeur = buildKmStats("chauffeurId");
+  const voyageDistanceTotal = state.voyages.reduce((sum, v) => sum + voyageDistance(v), 0);
+  const voyageProfitTotal = state.voyages.reduce((sum, v) => sum + voyageProfit(v), 0);
+  const voyageGasoilTotal = state.voyages.reduce((sum, v) => sum + numberOrZero(v.gasoil) + numberOrZero(v.gasoilRetour), 0);
+  const consoMoyenne = voyageDistanceTotal ? (voyageGasoilTotal / voyageDistanceTotal) * 100 : 0;
+  const profitParKm = voyageDistanceTotal ? voyageProfitTotal / voyageDistanceTotal : 0;
   const recent = [...state.odometres].sort((a,b) => dateMillis(b.date || b.createdAt) - dateMillis(a.date || a.createdAt)).slice(0, 20);
   const alerts = byCamion.filter(x => x.daysSince !== null && x.daysSince >= 2);
 
@@ -522,9 +557,15 @@ function statsKmHtml() {
       <div class="card stat-card"><div class="label">Derniers relevés</div><div class="value">${recent.length}</div></div>
       <div class="card stat-card"><div class="label">Alertes KM</div><div class="value">${alerts.length}</div></div>
       <div class="card stat-card"><div class="label">Moyenne/camion</div><div class="value">${activeTrucks ? Math.round(totalDistance / activeTrucks).toLocaleString("fr-CA") : 0} km</div></div>
+      <div class="card stat-card"><div class="label">Conso moyenne voyages</div><div class="value">${ratio(consoMoyenne, " /100 km")}</div></div>
+      <div class="card stat-card"><div class="label">Bénéfice moyen/km</div><div class="value">${ratio(profitParKm, " DA/km")}</div></div>
     </div>
     <div class="card"><div class="card-header"><div><h2>Par camion</h2><p class="muted">Distance = dernier KM - premier KM enregistré.</p></div></div><div class="list">
       ${byCamion.length ? byCamion.map(x => `<div class="item-card km-row"><div><h4>${escapeHtml(camionName(x.key))}</h4><p>Premier KM : ${x.firstKm.toLocaleString("fr-CA")} · Dernier KM : ${x.lastKm.toLocaleString("fr-CA")}</p><p>Dernier relevé : ${dateLabel(x.last.date || x.last.createdAt)} par ${escapeHtml(chauffeurName(x.last.chauffeurId))}</p></div><div class="driver-score"><strong>${x.distance.toLocaleString("fr-CA")}</strong><span>km</span></div></div>`).join("") : `<div class="item-card"><p>Aucun relevé KM.</p></div>`}
+    </div></div>
+
+    <div class="card"><div class="card-header"><div><h2>Rentabilité voyages</h2><p class="muted">Basée sur KM départ / KM arrivée par voyage.</p></div></div><div class="list">
+      ${state.voyages.length ? state.voyages.map(v => `<div class="item-card km-row"><div><h4>${escapeHtml(v.client || "-")} → ${escapeHtml(v.destination || "-")}</h4><p>Camion : ${escapeHtml(camionName(v.camionId))} · Chauffeur : ${escapeHtml(v.nomChauffeur || chauffeurName(v.chauffeurId))}</p>${voyageAdvancedLine(v)}</div><div class="driver-score"><strong>${money(voyageProfit(v))}</strong><span>bénéfice</span></div></div>`).join("") : `<div class="item-card"><p>Aucun voyage avec données KM.</p></div>`}
     </div></div>
     <div class="card"><div class="card-header"><div><h2>Par chauffeur</h2><p class="muted">Performance kilométrage par chauffeur.</p></div></div><div class="list">
       ${byChauffeur.length ? byChauffeur.map(x => `<div class="item-card km-row"><div><h4>${escapeHtml(chauffeurName(x.key))}</h4><p>Relevés : ${x.count} · Dernier KM : ${x.lastKm.toLocaleString("fr-CA")}</p><p>Dernier camion : ${escapeHtml(camionName(x.last.camionId))} · ${dateLabel(x.last.date || x.last.createdAt)}</p></div><div class="driver-score"><strong>${x.distance.toLocaleString("fr-CA")}</strong><span>km</span></div></div>`).join("") : `<div class="item-card"><p>Aucun relevé chauffeur.</p></div>`}
@@ -686,7 +727,7 @@ function bindActions() {
 
   document.querySelectorAll("[data-edit-chauffeur]").forEach(btn => btn.addEventListener("click", async () => {
     const item = pickForEdit(state.chauffeurs, btn.dataset.editChauffeur);
-    const update = promptUpdate(item, ["nom", "numeroChauffeur", "numeroPermis", "telephone", "adresse", "kilometrageApres10Voyages", "status"]);
+    const update = promptUpdate(item, ["nom", "numeroChauffeur", "numeroPermis", "telephone", "adresse", "status"]);
     if (!update) return;
     await updateChauffeur(item.id, update);
     await refreshData();
@@ -699,7 +740,7 @@ function bindActions() {
   }));
   document.querySelectorAll("[data-edit-voyage]").forEach(btn => btn.addEventListener("click", async () => {
     const item = pickForEdit(state.voyages, btn.dataset.editVoyage);
-    const update = promptUpdate(item, ["client", "destination", "prixCourse", "gasoil", "fraisMission", "retourClient", "retourDestination", "prixCourseRetour", "gasoilRetour", "fraisMissionRetour"]);
+    const update = promptUpdate(item, ["client", "destination", "prixCourse", "gasoil", "fraisMission", "retourClient", "retourDestination", "prixCourseRetour", "gasoilRetour", "fraisMissionRetour", "kmDepart", "kmArrivee"]);
     if (!update) return;
     await updateVoyage(item.id, update);
     await refreshData();
@@ -789,7 +830,6 @@ function bindForms() {
         numeroPermis: data.numeroPermis || "",
         telephone: data.telephone || "",
         adresse: data.adresse || "",
-        kilometrageApres10Voyages: numberOrZero(data.kilometrageApres10Voyages),
         email,
         invitedEmail: email,
         status: data.status || "actif",
@@ -819,7 +859,7 @@ function bindForms() {
     e.preventDefault();
     const form = e.currentTarget;
     const data = formToObject(form);
-    ["prixCourse","gasoil","fraisMission","prixCourseRetour","fraisMissionRetour","gasoilRetour","kilometrageApres10Voyages"].forEach(k => data[k] = numberOrZero(data[k]));
+    ["prixCourse","gasoil","fraisMission","prixCourseRetour","fraisMissionRetour","gasoilRetour","kmDepart","kmArrivee"].forEach(k => data[k] = numberOrZero(data[k]));
     ["dateDepart","dateArrivee","dateRetour","dateRetourArrivee"].forEach(k => data[k] = dateTimeOrNull(data[k]));
     const file = form.voyageFile.files[0];
     delete data.voyageFile;

@@ -417,3 +417,6 @@ html[dir="rtl"] .km-row { text-align: right; }
 @media (max-width: 720px) {
   .km-hero, .km-row { flex-direction: column; align-items: stretch; }
 }
+
+.km-advanced-line { margin-top: 8px; padding: 10px 12px; border-radius: 14px; background: #eef6ff; color: #0f172a; font-weight: 700; }
+html[dir="rtl"] .km-advanced-line { text-align: right; }
