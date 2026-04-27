@@ -1,14 +1,16 @@
 import { logout, observeAuth, getUserProfile } from "./firebase.js";
 
 export function money(value) {
-  return new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD" }).format(Number(value || 0));
+  const currentLang = localStorage.getItem("truckLang") || "fr";
+  return new Intl.NumberFormat(currentLang === "ar" ? "ar-DZ" : "fr-DZ", { style: "currency", currency: "DZD", maximumFractionDigits: 2 }).format(Number(value || 0));
 }
 
 export function formatDate(value) {
   if (!value) return "-";
   try {
     const d = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
-    return new Intl.DateTimeFormat("fr-CA", { dateStyle: "medium", timeStyle: "short" }).format(d);
+    const currentLang = localStorage.getItem("truckLang") || "fr";
+    return new Intl.DateTimeFormat(currentLang === "ar" ? "ar-DZ" : "fr-DZ", { dateStyle: "medium", timeStyle: "short" }).format(d);
   } catch {
     return String(value);
   }

@@ -218,3 +218,38 @@ code{background:#eef2ff;padding:2px 6px;border-radius:8px}
   .driver-card-top { align-items: stretch; }
   .segmented { width: 100%; }
 }
+
+/* Langue FR / عربي */
+.lang-switch {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 9999;
+  display: flex;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 6px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, .18);
+}
+.lang-switch button {
+  border: none;
+  background: transparent;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 900;
+  color: #475569;
+}
+.lang-switch button.active {
+  background: #0f172a;
+  color: #fff;
+}
+html[dir="rtl"] body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif; }
+html[dir="rtl"] .sidebar { right: 0; left: auto; }
+html[dir="rtl"] .main { direction: rtl; }
+html[dir="rtl"] input, html[dir="rtl"] textarea, html[dir="rtl"] select { text-align: right; }
+html[dir="rtl"] .actions, html[dir="rtl"] .card-header, html[dir="rtl"] .mobile-head, html[dir="rtl"] .driver-card-top { direction: rtl; }
+html[dir="rtl"] .driver-card { border-left: 0; border-right: 5px solid #16a34a; }
+html[dir="rtl"] .driver-card.is-inactive { border-right-color: #ef4444; }
+html[dir="rtl"] .lang-switch { left: 14px; right: auto; }
