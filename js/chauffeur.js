@@ -1,5 +1,5 @@
 import {
-  addVoyage, updateVoyage, deleteVoyage, getMesVoyages, getCamions, addOdometre, updateOdometre, getMesOdometres, getOdometres, uploadFile, setAffectationJour, getAffectationJour
+  addVoyage, updateVoyage, deleteVoyage, getMesVoyages, getCamions, addOdometre, updateOdometre, getMesOdometres, getOdometres, uploadFile, setAffectationJour, getAffectationJour, addDepense, getDepenses
 } from "./firebase.js";
 import {
   money, formatDate, escapeHtml, formToObject, numberOrZero, dateTimeOrNull,
@@ -11,7 +11,9 @@ const state = {
   voyages: [],
   camions: [],
   odometres: [],
-  affectationJour: null
+  depenses: [],
+  affectationJour: null,
+  activeView: localStorage.getItem("chauffeurActiveView") || "km"
 };
 
 const KM_SUSPECT_JUMP = 2000;
@@ -235,6 +237,69 @@ function odometerHtml() {
   `;
 }
 
+function mesDepenses() {
+  return (state.depenses || []).filter(d => d.chauffeurId === state.profile?.id || d.createdBy === state.profile?.id);
+}
+
+function depensesHtml() {
+  const selected = selectedCamionId();
+  const depenses = mesDepenses();
+  const total = depenses.reduce((s, d) => s + numberOrZero(d.montant), 0);
+  return `
+    <div class="card">
+      <div class="card-header"><div><h2>Dépenses chauffeur / مصاريف السائق</h2><p class="muted">Ajoute tes dépenses liées à la journée ou au voyage. L’admin les verra dans son espace.</p></div></div>
+      <form id="driverDepenseForm" class="form-grid">
+        <label><span>Type</span><select name="type" required>
+          <option value="gasoil">Gasoil</option>
+          <option value="frais_mission">Frais de mission</option>
+          <option value="peage">Péage</option>
+          <option value="parking">Parking</option>
+          <option value="autre">Autre</option>
+        </select></label>
+        <label><span>Camion</span><select name="camionId"><option value="">Sans camion</option>${camionOptions(selected)}</select></label>
+        <label><span>Montant DZD</span><input name="montant" type="number" step="0.01" min="0" required></label>
+        <label><span>Date</span><input name="date" type="date" value="${todayKey()}"></label>
+        <label class="full"><span>Description / ملاحظة</span><textarea name="description" placeholder="Ex: gasoil, repas, péage..."></textarea></label>
+        <button class="btn primary full" type="submit">Ajouter dépense</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><h2>Mes dépenses</h2><p class="muted">Total : <strong>${money(total)}</strong></p></div></div>
+      <div class="list">
+        ${depenses.length ? depenses.slice(0, 20).map(d => `
+          <div class="item-card">
+            <h4>${escapeHtml(d.type || "Dépense")} <span class="badge">${money(d.montant)}</span></h4>
+            <p>Date : ${formatDate(d.date || d.createdAt)} | Camion : ${escapeHtml(camionLabel(d.camionId))}</p>
+            ${d.description ? `<p>${escapeHtml(d.description)}</p>` : ""}
+          </div>
+        `).join("") : `<div class="item-card"><p>Aucune dépense enregistrée.</p></div>`}
+      </div>
+    </div>
+  `;
+}
+
+function parametresHtml() {
+  return `
+    <div class="card">
+      <div class="card-header"><div><h2>Paramètres chauffeur / الإعدادات</h2><p class="muted">Informations du compte et camion du jour.</p></div></div>
+      <div class="info-grid">
+        <div class="item-card"><h4>Nom</h4><p>${escapeHtml(state.profile?.name || "-")}</p></div>
+        <div class="item-card"><h4>Email</h4><p>${escapeHtml(state.profile?.email || "-")}</p></div>
+        <div class="item-card"><h4>Rôle</h4><p>${escapeHtml(state.profile?.role || "chauffeur")}</p></div>
+        <div class="item-card"><h4>Camion du jour</h4><p>${escapeHtml(camionLabel(selectedCamionId()))}</p></div>
+      </div>
+      <p class="muted">Pour modifier le mot de passe, utilise le bouton “Mot de passe oublié” dans la page connexion.</p>
+    </div>
+  `;
+}
+
+function mainViewHtml() {
+  if (state.activeView === "voyages") return formHtml() + tripsHtml();
+  if (state.activeView === "depenses") return depensesHtml();
+  if (state.activeView === "parametres") return dailyTruckHtml() + parametresHtml();
+  return dailyTruckHtml() + odometerHtml();
+}
+
 function tripsHtml() {
   return `
     <div class="card">
@@ -260,16 +325,33 @@ function tripsHtml() {
   `;
 }
 
+function bindDriverMenu() {
+  document.querySelectorAll("[data-driver-view]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.driverView === state.activeView);
+    btn.onclick = () => {
+      state.activeView = btn.dataset.driverView;
+      localStorage.setItem("chauffeurActiveView", state.activeView);
+      render();
+    };
+  });
+}
+
 function render() {
   document.getElementById("driverDashboard").innerHTML = dashboardHtml();
-  document.getElementById("driverFormView").innerHTML = dailyTruckHtml() + odometerHtml() + formHtml();
-  document.getElementById("driverTripsView").innerHTML = tripsHtml();
+  const main = document.getElementById("driverMainView");
+  if (main) main.innerHTML = mainViewHtml();
+  bindDriverMenu();
   bindForm();
   bindActions();
 }
 
 async function refreshData() {
-  [state.voyages, state.camions, state.odometres] = await Promise.all([getMesVoyages(), getCamions(), getMesOdometres()]);
+  [state.voyages, state.camions, state.odometres, state.depenses] = await Promise.all([
+    getMesVoyages(),
+    getCamions(),
+    getMesOdometres(),
+    getDepenses().catch(() => [])
+  ]);
   state.affectationJour = state.profile?.id ? await getAffectationJour(state.profile.id, todayKey()).catch(() => null) : null;
   render();
 }
@@ -463,6 +545,22 @@ function bindForm() {
     await refreshData();
   });
 
+  document.getElementById("driverDepenseForm")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const data = formToObject(form);
+    data.chauffeurId = state.profile.id;
+    data.nomChauffeur = state.profile.name || "";
+    data.montant = numberOrZero(data.montant);
+    data.date = data.date ? new Date(data.date + "T12:00:00") : new Date();
+    if (!data.type) return alert("Choisir un type de dépense.");
+    if (!data.montant || data.montant <= 0) return alert("Montant obligatoire.");
+    await addDepense(data);
+    form.reset();
+    alert("Dépense ajoutée ✅");
+    await refreshData();
+  });
+
   document.getElementById("driverTripForm")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -495,6 +593,9 @@ function bindForm() {
       await updateVoyage(ref.id, { documentUrl: url });
     }
     form.reset();
+    state.activeView = "km";
+    localStorage.setItem("chauffeurActiveView", "km");
+    alert("Voyage ajouté ✅. Inscris ou vérifie maintenant le KM du jour.");
     await refreshData();
   });
 }

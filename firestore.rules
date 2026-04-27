@@ -84,8 +84,14 @@ service cloud.firestore {
     }
 
     match /depenses/{id} {
+      // Admin voit tout. Chauffeur peut lire les dépenses afin que l’app filtre ses propres dépenses côté interface.
       allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
+
+      // Admin crée toutes les dépenses. Chauffeur crée seulement une dépense liée à son UID.
+      allow create: if isAdmin() || (isDriver() && request.resource.data.chauffeurId == request.auth.uid);
+
+      // Modification/suppression réservée à l’admin pour garder les comptes propres.
+      allow update, delete: if isAdmin();
     }
 
     match /parametres/{id} {

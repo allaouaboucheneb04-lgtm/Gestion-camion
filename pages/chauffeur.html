@@ -4,10 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chauffeur - Gestion Camion Algérie Pro</title>
-  <link rel="stylesheet" href="../css/style.css?v=email1" />
+  <link rel="stylesheet" href="../css/style.css?v=chauffeur-menu1" />
 </head>
 <body>
-  <div class="app-shell compact">
+  <div class="app-shell">
+    <aside class="sidebar chauffeur-sidebar">
+      <div class="brand">
+        <div class="brand-mark">🚛</div>
+        <div>
+          <h2>Chauffeur</h2>
+          <small>لوحة السائق</small>
+        </div>
+      </div>
+      <nav class="menu chauffeur-menu">
+        <button class="menu-item active" data-driver-view="km">KM du jour</button>
+        <button class="menu-item" data-driver-view="voyages">Voyages</button>
+        <button class="menu-item" data-driver-view="depenses">Dépenses</button>
+        <button class="menu-item" data-driver-view="parametres">Paramètres</button>
+      </nav>
+    </aside>
     <main class="main">
       <div class="mobile-head">
         <div>
@@ -18,14 +33,13 @@
       </div>
 
       <section id="driverDashboard" class="section-space"></section>
-      <section id="driverFormView" class="section-space"></section>
-      <section id="driverTripsView" class="section-space"></section>
+      <section id="driverMainView" class="section-space"></section>
     </main>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-  <script src="../js/email-config.js?v=email1"></script>
-  <script type="module" src="../js/chauffeur.js?v=email1"></script>
-  <script type="module" src="../js/i18n.js?v=email1"></script>
+  <script src="../js/email-config.js?v=chauffeur-menu1"></script>
+  <script type="module" src="../js/chauffeur.js?v=chauffeur-menu1"></script>
+  <script type="module" src="../js/i18n.js?v=chauffeur-menu1"></script>
 </body>
 </html>
