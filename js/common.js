@@ -52,8 +52,9 @@ export async function requireRole(expectedRole, redirectPath = "../index.html") 
           clearTimeout(timer); done = true; window.location.href = redirectPath; return;
         }
         const profile = await getUserProfile(user.uid);
-        if (!profile) throw new Error(`Profil introuvable. Crée Firestore users/ avec role: admin.`);
-        if (expectedRole && profile.role !== expectedRole) throw new Error(`Rôle incorrect: . Rôle attendu: .`);
+        if (!profile) throw new Error(`Profil introuvable. Crée Firestore users/${user.uid} avec role: admin.`);
+        if (profile.status === "inactif") { await logout(); throw new Error("Compte désactivé. Contacte l’administrateur."); }
+        if (expectedRole && profile.role !== expectedRole) throw new Error(`Rôle incorrect: ${profile.role || "aucun"}. Rôle attendu: ${expectedRole}.`);
         clearTimeout(timer); done = true; resolve({ user, profile });
       } catch (e) {
         clearTimeout(timer); done = true; reject(e);

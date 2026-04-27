@@ -261,3 +261,36 @@ avec:
 
 ## Correctif blocage dashboard
 Cette version met à jour le service worker, supprime les anciens caches et affiche une erreur claire si le rôle admin ou le profil Firestore manque.
+
+## Mise à jour Chauffeurs Pro
+
+Cette version remplace la suppression complète par un mode **désactivation / réactivation** compatible iPhone, sans Cloud Function obligatoire.
+
+### Fonctionnalités ajoutées
+- Badge **Actif / Inactif** sur chaque chauffeur.
+- Filtres **Actifs / Inactifs / Tous**.
+- Bouton **Désactiver** au lieu de supprimer.
+- Bouton **Réactiver** pour remettre un chauffeur actif.
+- Les nouveaux voyages affichent seulement les chauffeurs actifs.
+- Le login bloque un compte `users/{uid}` avec `status: "inactif"`.
+
+### Champs importants
+Dans `chauffeurs/{id}` :
+```json
+{
+  "userId": "UID_DU_CHAUFFEUR",
+  "nom": "Nom chauffeur",
+  "email": "email@exemple.com",
+  "status": "actif"
+}
+```
+
+Dans `users/{uid}` :
+```json
+{
+  "role": "chauffeur",
+  "status": "actif"
+}
+```
+
+Pour désactiver, l'app met `status: "inactif"` dans `chauffeurs/{id}` et `users/{uid}`.

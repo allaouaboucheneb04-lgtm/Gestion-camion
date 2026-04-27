@@ -1,7 +1,7 @@
 import {
   addCamion, updateCamion, deleteCamion, getCamions,
   addChauffeur, updateChauffeur, deleteChauffeur, getChauffeurs,
-  inviteDriverAccount, deleteDriverAccount, createDriverAuthAccount, saveUserProfile,
+  inviteDriverAccount, createDriverAuthAccount, saveUserProfile,
   addVoyage, updateVoyage, deleteVoyage, getVoyages,
   addEntretien, updateEntretien, deleteEntretien, getEntretiens,
   addDepense, updateDepense, deleteDepense, getDepenses,
@@ -39,7 +39,8 @@ const state = {
   voyages: [],
   entretien: [],
   depenses: [],
-  selectedChauffeurId: null
+  selectedChauffeurId: null,
+  chauffeurFilter: "actif"
 };
 
 function setActiveView(name) {
@@ -69,7 +70,7 @@ function dashboardHtml() {
   return `
     <div class="stats-grid">
       <div class="card stat-card"><div class="label">Camions</div><div class="value">${state.camions.length}</div></div>
-      <div class="card stat-card"><div class="label">Chauffeurs</div><div class="value">${state.chauffeurs.length}</div></div>
+      <div class="card stat-card"><div class="label">Chauffeurs actifs</div><div class="value">${state.chauffeurs.filter(c => (c.status || "actif") === "actif").length}</div></div>
       <div class="card stat-card"><div class="label">Revenu total</div><div class="value">${money(revenu)}</div></div>
       <div class="card stat-card"><div class="label">Bénéfice estimé</div><div class="value">${money(benefice)}</div></div>
     </div>
@@ -172,6 +173,7 @@ function chauffeurDetailsHtml(chauffeur) {
           <p><strong>Téléphone :</strong> ${escapeHtml(chauffeur.telephone || "-")}</p>
           <p><strong>Adresse :</strong> ${escapeHtml(chauffeur.adresse || "-")}</p>
           <p><strong>UID :</strong> ${escapeHtml(uid || "-")}</p>
+          <p><strong>Statut compte :</strong> <span class="status-pill ${(chauffeur.status || "actif") === "inactif" ? "inactive" : "active"}">${(chauffeur.status || "actif") === "inactif" ? "Inactif" : "Actif"}</span></p>
         </div>
         <div class="item-card">
           <h4>Travail / permis</h4>
@@ -213,7 +215,28 @@ function chauffeurDetailsHtml(chauffeur) {
 }
 
 function chauffeursHtml() {
+  const activeCount = state.chauffeurs.filter(c => (c.status || "actif") === "actif").length;
+  const inactiveCount = state.chauffeurs.filter(c => (c.status || "actif") === "inactif").length;
+  const shown = state.chauffeurs.filter(c => {
+    const st = c.status || "actif";
+    if (state.chauffeurFilter === "tous") return true;
+    return st === state.chauffeurFilter;
+  });
+
   return `
+    <div class="driver-hero card">
+      <div>
+        <p class="eyebrow">Gestion chauffeurs</p>
+        <h2>Tableau chauffeur professionnel</h2>
+        <p class="muted">Crée, consulte, désactive ou réactive un chauffeur sans supprimer son historique.</p>
+      </div>
+      <div class="driver-mini-stats">
+        <div><strong>${activeCount}</strong><span>Actifs</span></div>
+        <div><strong>${inactiveCount}</strong><span>Inactifs</span></div>
+        <div><strong>${state.chauffeurs.length}</strong><span>Total</span></div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-header"><div><h2>Ajouter un chauffeur</h2><p class="muted">Créer le compte chauffeur avec un mot de passe temporaire</p></div></div>
       <form id="chauffeurForm" class="form-grid">
@@ -224,6 +247,7 @@ function chauffeursHtml() {
         <label><span>Numéro de permis</span><input name="numeroPermis"></label>
         <label><span>Téléphone</span><input name="telephone"></label>
         <label><span>Kilométrage après chèque 10 voyages</span><input name="kilometrageApres10Voyages" type="number" step="0.01"></label>
+        <label><span>Statut</span><select name="status"><option value="actif">Actif</option><option value="inactif">Inactif</option></select></label>
         <label class="full"><span>Adresse</span><textarea name="adresse"></textarea></label>
         <label class="full"><span>Permis / document (optionnel)</span><input type="file" name="profilFile" accept="image/*,.pdf"></label>
         <button class="btn primary full" type="submit">Créer chauffeur</button>
@@ -231,26 +255,45 @@ function chauffeursHtml() {
     </div>
 
     <div class="card">
-      <div class="card-header"><div><h2>Liste des chauffeurs</h2><p class="muted">Clique sur Détails pour voir le profil complet, voyages et statistiques</p></div></div>
-      <div class="list">
-        ${state.chauffeurs.length ? state.chauffeurs.map(c => `
-          <div class="item-card">
-            <h4>${escapeHtml(c.nom || "-")}</h4>
-            <p>UID : ${escapeHtml(c.userId || "-")}</p>
-            <p>Email invitation : ${escapeHtml(c.invitedEmail || "-")}</p>
-            <p>Statut invitation : ${escapeHtml(c.statutInvitation || "-")}</p>
-            <p>Numéro chauffeur : ${escapeHtml(c.numeroChauffeur || "-")}</p>
-            <p>Permis : ${escapeHtml(c.numeroPermis || "-")}</p>
-            <p>Adresse : ${escapeHtml(c.adresse || "-")}</p>
-            <p>Kilométrage après 10 voyages : ${escapeHtml(c.kilometrageApres10Voyages || "-")}</p>
-            ${c.documentUrl ? `<p><a href="${c.documentUrl}" target="_blank" rel="noopener">Voir le document</a></p>` : ""}
+      <div class="card-header driver-list-header">
+        <div><h2>Liste des chauffeurs</h2><p class="muted">Détails, performance, activation et désactivation du compte</p></div>
+        <div class="segmented">
+          <button class="seg-btn ${state.chauffeurFilter === "actif" ? "active" : ""}" data-filter-chauffeurs="actif">Actifs</button>
+          <button class="seg-btn ${state.chauffeurFilter === "inactif" ? "active" : ""}" data-filter-chauffeurs="inactif">Inactifs</button>
+          <button class="seg-btn ${state.chauffeurFilter === "tous" ? "active" : ""}" data-filter-chauffeurs="tous">Tous</button>
+        </div>
+      </div>
+      <div class="list driver-list">
+        ${shown.length ? shown.map(c => {
+          const status = c.status || "actif";
+          const isInactive = status === "inactif";
+          const uid = c.userId || c.uid || "";
+          const voyages = state.voyages.filter(v => v.chauffeurId === uid);
+          const revenu = voyages.reduce((sum, v) => sum + numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour), 0);
+          return `
+          <div class="item-card driver-card ${isInactive ? "is-inactive" : ""}">
+            <div class="driver-card-top">
+              <div>
+                <h4>${escapeHtml(c.nom || "-")} <span class="status-pill ${isInactive ? "inactive" : "active"}">${isInactive ? "Inactif" : "Actif"}</span></h4>
+                <p>${escapeHtml(c.email || c.invitedEmail || "-")} · ${escapeHtml(c.telephone || "-")}</p>
+              </div>
+              <div class="driver-score"><strong>${voyages.length}</strong><span>voyages</span></div>
+            </div>
+            <div class="driver-info-grid">
+              <p><strong>UID</strong><br>${escapeHtml(uid || "-")}</p>
+              <p><strong>No chauffeur</strong><br>${escapeHtml(c.numeroChauffeur || "-")}</p>
+              <p><strong>Permis</strong><br>${escapeHtml(c.numeroPermis || "-")}</p>
+              <p><strong>Revenu</strong><br>${money(revenu)}</p>
+            </div>
+            <p class="muted">Adresse : ${escapeHtml(c.adresse || "-")}</p>
+            ${c.documentUrl ? `<p><a href="${c.documentUrl}" target="_blank" rel="noopener">Voir permis / document</a></p>` : ""}
             <div class="actions">
               <button class="btn primary" data-detail-chauffeur="${c.id}">Détails</button>
               <button class="btn secondary" data-edit-chauffeur="${c.id}">Modifier</button>
-              <button class="btn danger" data-delete-chauffeur="${c.id}">Supprimer</button>
+              ${isInactive ? `<button class="btn success" data-enable-chauffeur="${c.id}">Réactiver</button>` : `<button class="btn danger" data-disable-chauffeur="${c.id}">Désactiver</button>`}
             </div>
-          </div>
-        `).join("") : `<div class="item-card"><p>Aucun chauffeur pour le moment.</p></div>`}
+          </div>`;
+        }).join("") : `<div class="item-card"><p>Aucun chauffeur dans ce filtre.</p></div>`}
       </div>
     </div>
     ${chauffeurDetailsHtml(pickForEdit(state.chauffeurs, state.selectedChauffeurId))}
@@ -258,7 +301,7 @@ function chauffeursHtml() {
 }
 
 function voyagesHtml() {
-  const chauffeurOptions = state.chauffeurs.map(c => `<option value="${c.userId}">${escapeHtml(c.nom)} (${escapeHtml(c.userId)})</option>`).join("");
+  const chauffeurOptions = state.chauffeurs.filter(c => (c.status || "actif") === "actif" && c.userId).map(c => `<option value="${c.userId}">${escapeHtml(c.nom)} (${escapeHtml(c.userId)})</option>`).join("");
   const camionOptions = state.camions.map(c => `<option value="${c.id}">${escapeHtml(c.numeroCamion)} - ${escapeHtml(c.marqueModele)}</option>`).join("");
   return `
     <div class="card">
@@ -478,23 +521,44 @@ function bindActions() {
     setActiveView("chauffeurs");
   }));
 
-  document.querySelectorAll("[data-delete-chauffeur]").forEach(btn => btn.addEventListener("click", async () => {
-    const chauffeur = pickForEdit(state.chauffeurs, btn.dataset.deleteChauffeur);
-    const uid = chauffeur?.userId || chauffeur?.uid || "";
-    const uidText = uid || "aucun UID Auth — seule la fiche chauffeur sera supprimée";
-    if (!confirm(`Supprimer complètement ce chauffeur ?\n\nCela supprime :\n- la fiche chauffeur\n- le document users/{uid} si UID existe\n- le compte Firebase Authentication si UID existe\n\nUID: ${uidText}`)) return;
+  document.querySelectorAll("[data-filter-chauffeurs]").forEach(btn => btn.addEventListener("click", () => {
+    state.chauffeurFilter = btn.dataset.filterChauffeurs;
+    render();
+    setActiveView("chauffeurs");
+  }));
 
+  document.querySelectorAll("[data-disable-chauffeur]").forEach(btn => btn.addEventListener("click", async () => {
+    const chauffeur = pickForEdit(state.chauffeurs, btn.dataset.disableChauffeur);
+    if (!chauffeur) return;
+    if (!confirm(`Désactiver ${chauffeur.nom || "ce chauffeur"} ?\n\nIl ne sera plus disponible dans les nouveaux voyages et son compte sera marqué inactif.`)) return;
     try {
-      await deleteDriverAccount({ chauffeurDocId: btn.dataset.deleteChauffeur, uid });
-      alert("Chauffeur supprimé complètement ✅");
+      await updateChauffeur(chauffeur.id, { status: "inactif" });
+      if (chauffeur.userId) await saveUserProfile(chauffeur.userId, { status: "inactif" });
+      alert("Chauffeur désactivé ✅");
       await refreshData();
+      setActiveView("chauffeurs");
     } catch (error) {
-      displayError(error, "Suppression chauffeur complète");
+      displayError(error, "Désactivation chauffeur");
     }
   }));
+
+  document.querySelectorAll("[data-enable-chauffeur]").forEach(btn => btn.addEventListener("click", async () => {
+    const chauffeur = pickForEdit(state.chauffeurs, btn.dataset.enableChauffeur);
+    if (!chauffeur) return;
+    try {
+      await updateChauffeur(chauffeur.id, { status: "actif" });
+      if (chauffeur.userId) await saveUserProfile(chauffeur.userId, { status: "actif" });
+      alert("Chauffeur réactivé ✅");
+      await refreshData();
+      setActiveView("chauffeurs");
+    } catch (error) {
+      displayError(error, "Réactivation chauffeur");
+    }
+  }));
+
   document.querySelectorAll("[data-edit-chauffeur]").forEach(btn => btn.addEventListener("click", async () => {
     const item = pickForEdit(state.chauffeurs, btn.dataset.editChauffeur);
-    const update = promptUpdate(item, ["nom", "numeroChauffeur", "numeroPermis", "telephone", "adresse", "kilometrageApres10Voyages"]);
+    const update = promptUpdate(item, ["nom", "numeroChauffeur", "numeroPermis", "telephone", "adresse", "kilometrageApres10Voyages", "status"]);
     if (!update) return;
     await updateChauffeur(item.id, update);
     await refreshData();
@@ -587,7 +651,7 @@ function bindForms() {
         role: "chauffeur",
         phone: data.telephone || "",
         address: data.adresse || "",
-        status: "actif"
+        status: data.status || "actif"
       });
 
       const chauffeurRef = await addChauffeur({
@@ -598,7 +662,9 @@ function bindForms() {
         telephone: data.telephone || "",
         adresse: data.adresse || "",
         kilometrageApres10Voyages: numberOrZero(data.kilometrageApres10Voyages),
+        email,
         invitedEmail: email,
+        status: data.status || "actif",
         statutInvitation: "compte_cree"
       });
 

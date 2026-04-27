@@ -8,10 +8,14 @@ observeAuth(async user => {
   try {
     const profile = await getUserProfile(user.uid);
     if (!profile) {
-      message.textContent = `Profil introuvable. Crée users/ dans Firestore.`;
+      message.textContent = `Profil introuvable. Crée users/${user.uid} dans Firestore.`;
       return;
     }
-    window.location.href = profile.role === "admin" ? "./pages/admin.html?v=final8" : "./pages/chauffeur.html?v=final8";
+    if (profile.status === "inactif") {
+      message.textContent = "Compte désactivé. Contacte l’administrateur.";
+      return;
+    }
+    window.location.href = profile.role === "admin" ? "./pages/admin.html?v=prochauffeur" : "./pages/chauffeur.html?v=prochauffeur";
   } catch (e) {
     message.textContent = e.message || "Erreur de lecture du profil";
   }
@@ -26,7 +30,8 @@ form?.addEventListener("submit", async (e) => {
     const cred = await login(email, password);
     const profile = await getUserProfile(cred.user.uid);
     if (!profile) throw new Error("Rôle introuvable dans users/{uid}");
-    window.location.href = profile.role === "admin" ? "./pages/admin.html?v=final8" : "./pages/chauffeur.html?v=final8";
+    if (profile.status === "inactif") throw new Error("Compte désactivé. Contacte l’administrateur.");
+    window.location.href = profile.role === "admin" ? "./pages/admin.html?v=prochauffeur" : "./pages/chauffeur.html?v=prochauffeur";
   } catch (err) {
     message.textContent = err.message || "Erreur de connexion";
   }
