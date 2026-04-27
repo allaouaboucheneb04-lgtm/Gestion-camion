@@ -7,15 +7,15 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return signedIn() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
     }
 
     function isDriver() {
-      return signedIn() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "chauffeur";
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "chauffeur";
     }
 
     function isSelf(uid) {
@@ -26,7 +26,8 @@ service cloud.firestore {
       allow read: if isAdmin() || isSelf(userId);
       allow create: if isAdmin();
       allow update: if isAdmin() || isSelf(userId);
-      allow delete: if isAdmin();
+      // Suppression complète par Cloud Function deleteDriver seulement.
+      allow delete: if false;
     }
 
     match /camions/{id} {
@@ -36,7 +37,9 @@ service cloud.firestore {
 
     match /chauffeurs/{id} {
       allow read: if isAdmin() || (isDriver() && resource.data.userId == request.auth.uid);
-      allow create, update, delete: if isAdmin();
+      allow create, update: if isAdmin();
+      // Suppression complète par Cloud Function deleteDriver seulement.
+      allow delete: if false;
     }
 
     match /voyages/{id} {

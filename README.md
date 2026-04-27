@@ -210,3 +210,51 @@ firebase deploy --only functions
 ```
 
 Puis republier `firestore.rules`.
+
+## Correctif final: suppression complète chauffeur
+
+Cette version corrige la suppression complète des chauffeurs.
+
+### À faire après upload sur GitHub Pages
+
+1. Publie `firestore.rules` dans Firebase > Firestore > Rules.
+2. Déploie la Cloud Function dans le même projet Firebase:
+
+```bash
+npm install -g firebase-tools
+firebase login
+cd chemin/du/projet
+firebase use gestion-camion-93e44
+cd functions
+npm install
+cd ..
+firebase deploy --only functions
+```
+
+3. Dans Firebase > Functions, tu dois voir:
+
+```text
+deleteDriver — us-central1
+```
+
+4. Ton compte admin doit être dans Firestore:
+
+```text
+users/{TON_UID_FIREBASE}
+```
+
+avec:
+
+```json
+{
+  "role": "admin",
+  "name": "Alaoua",
+  "email": "allaouaboucheneb04@gmail.com"
+}
+```
+
+### Important
+
+- Les rules bloquent la suppression directe de `users` et `chauffeurs` côté navigateur.
+- La suppression complète passe par `deleteDriver` avec Firebase Admin SDK.
+- Les anciennes fiches chauffeur avec `UID: -` seront supprimées seulement dans Firestore, car elles n'ont pas de compte Auth.

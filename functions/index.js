@@ -1,4 +1,4 @@
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 
 admin.initializeApp();
@@ -12,45 +12,104 @@ function cleanEmail(value) {
   return cleanString(value).toLowerCase();
 }
 
-function randomPassword(length = 22) {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
-  let out = '';
-  for (let i = 0; i < length; i += 1) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
+async function assertAdmin(context) {
+  if (!context.auth || !context.auth.uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'Connexion requise. Reconnecte-toi en admin.');
+  }
+
+  const adminDoc = await db.collection('users').doc(context.auth.uid).get();
+  if (!adminDoc.exists || adminDoc.data().role !== 'admin') {
+    throw new functions.https.HttpsError('permission-denied', 'Seul un admin peut faire cette action. Vérifie users/{tonUID} avec role: admin.');
+  }
+
+  return context.auth.uid;
 }
 
-function friendlyError(error) {
-  const code = error?.code || 'internal';
-  const msg = error?.message || 'Erreur interne.';
-  if (code === 'auth/email-already-exists') return 'Cet email existe déjà dans Firebase Auth.';
-  if (code === 'auth/invalid-email') return 'Email chauffeur invalide.';
-  if (code === 'auth/unauthorized-continue-uri') return 'Le domaine du lien invitation n’est pas autorisé dans Firebase Authentication > Settings > Authorized domains.';
-  if (code === 'permission-denied') return 'Permission refusée.';
-  return `${code}: ${msg}`;
-}
+exports.deleteDriver = functions
+  .region('us-central1')
+  .https.onCall(async (data, context) => {
+    const callerUid = await assertAdmin(context);
 
-exports.inviteDriver = onCall({ region: 'us-central1' }, async (request) => {
-  try {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Connexion requise.');
+    const chauffeurDocId = cleanString(data && data.chauffeurDocId);
+    let uid = cleanString(data && data.uid);
+
+    if (!chauffeurDocId && !uid) {
+      throw new functions.https.HttpsError('invalid-argument', 'UID ou document chauffeur obligatoire.');
     }
 
-    const adminDoc = await db.collection('users').doc(request.auth.uid).get();
-    if (!adminDoc.exists || adminDoc.data().role !== 'admin') {
-      throw new HttpsError('permission-denied', 'Seul un admin peut inviter un chauffeur.');
+    let chauffeurRef = null;
+    let chauffeurSnap = null;
+
+    if (chauffeurDocId) {
+      chauffeurRef = db.collection('chauffeurs').doc(chauffeurDocId);
+      chauffeurSnap = await chauffeurRef.get();
+      if (!chauffeurSnap.exists) {
+        throw new functions.https.HttpsError('not-found', 'Fiche chauffeur introuvable. Recharge la page.');
+      }
+      const c = chauffeurSnap.data() || {};
+      uid = uid || cleanString(c.userId || c.uid);
+    } else if (uid) {
+      const qs = await db.collection('chauffeurs').where('userId', '==', uid).limit(1).get();
+      if (!qs.empty) {
+        chauffeurSnap = qs.docs[0];
+        chauffeurRef = chauffeurSnap.ref;
+      }
     }
 
-    const data = request.data || {};
-    const email = cleanEmail(data.email);
-    const nom = cleanString(data.nom);
-    const numeroChauffeur = cleanString(data.numeroChauffeur);
-    const numeroPermis = cleanString(data.numeroPermis);
-    const telephone = cleanString(data.telephone);
-    const adresse = cleanString(data.adresse);
-    const kilometrageApres10Voyages = Number(data.kilometrageApres10Voyages || 0);
+    // Ancienne fiche invitation sans UID Auth: suppression Firestore seulement.
+    if (!uid) {
+      if (chauffeurRef) {
+        await chauffeurRef.delete();
+        return { ok: true, authDeleted: false, userDeleted: false, chauffeurDeleted: true, note: 'Fiche sans UID supprimée.' };
+      }
+      throw new functions.https.HttpsError('invalid-argument', 'Ce chauffeur n’a pas de UID Auth.');
+    }
 
-    if (!email) throw new HttpsError('invalid-argument', 'Email chauffeur obligatoire.');
-    if (!nom) throw new HttpsError('invalid-argument', 'Nom chauffeur obligatoire.');
+    if (uid === callerUid) {
+      throw new functions.https.HttpsError('failed-precondition', 'Tu ne peux pas supprimer ton propre compte admin.');
+    }
+
+    const targetUserDoc = await db.collection('users').doc(uid).get();
+    if (targetUserDoc.exists && targetUserDoc.data().role === 'admin') {
+      throw new functions.https.HttpsError('failed-precondition', 'Impossible de supprimer un admin avec le bouton chauffeur.');
+    }
+
+    const batch = db.batch();
+    if (chauffeurRef) batch.delete(chauffeurRef);
+    batch.delete(db.collection('users').doc(uid));
+    await batch.commit();
+
+    let authDeleted = true;
+    try {
+      await admin.auth().deleteUser(uid);
+    } catch (error) {
+      if (error.code === 'auth/user-not-found') {
+        authDeleted = false;
+      } else {
+        throw new functions.https.HttpsError('internal', `Auth delete error: ${error.code || ''} ${error.message || error}`);
+      }
+    }
+
+    return {
+      ok: true,
+      uid,
+      chauffeurDocId: chauffeurDocId || (chauffeurSnap ? chauffeurSnap.id : null),
+      authDeleted,
+      userDeleted: true,
+      chauffeurDeleted: !!chauffeurRef
+    };
+  });
+
+// Optionnel: invitation backend si tu l'utilises plus tard.
+exports.inviteDriver = functions
+  .region('us-central1')
+  .https.onCall(async (data, context) => {
+    await assertAdmin(context);
+
+    const email = cleanEmail(data && data.email);
+    const nom = cleanString(data && data.nom);
+    if (!email) throw new functions.https.HttpsError('invalid-argument', 'Email obligatoire.');
+    if (!nom) throw new functions.https.HttpsError('invalid-argument', 'Nom obligatoire.');
 
     let userRecord;
     try {
@@ -62,142 +121,32 @@ exports.inviteDriver = onCall({ region: 'us-central1' }, async (request) => {
     if (!userRecord) {
       userRecord = await admin.auth().createUser({
         email,
-        emailVerified: false,
         displayName: nom,
-        password: randomPassword()
+        password: cleanString(data.password) || Math.random().toString(36).slice(2) + 'Aa1!'
       });
-    } else {
-      await admin.auth().updateUser(userRecord.uid, { displayName: nom, disabled: false });
     }
 
-    const uid = userRecord.uid;
     const now = admin.firestore.FieldValue.serverTimestamp();
-
-    await db.collection('users').doc(uid).set({
+    await db.collection('users').doc(userRecord.uid).set({
       name: nom,
       email,
       role: 'chauffeur',
-      phone: telephone,
-      address: adresse,
-      invitedAt: now,
-      updatedAt: now
+      updatedAt: now,
+      createdAt: now
     }, { merge: true });
 
-    let chauffeurDocId = null;
-    const chauffeurSnap = await db.collection('chauffeurs').where('userId', '==', uid).limit(1).get();
-    const chauffeurData = {
-      userId: uid,
+    const chauffeurRef = await db.collection('chauffeurs').add({
+      userId: userRecord.uid,
       nom,
-      numeroChauffeur,
-      numeroPermis,
-      telephone,
-      adresse,
-      kilometrageApres10Voyages: Number.isFinite(kilometrageApres10Voyages) ? kilometrageApres10Voyages : 0,
-      invitedEmail: email,
-      statutInvitation: 'envoyee',
+      email,
+      telephone: cleanString(data.telephone),
+      adresse: cleanString(data.adresse),
+      numeroPermis: cleanString(data.numeroPermis),
+      numeroChauffeur: cleanString(data.numeroChauffeur),
+      kilometrageApres10Voyages: Number(data.kilometrageApres10Voyages || 0),
+      createdAt: now,
       updatedAt: now
-    };
-
-    if (chauffeurSnap.empty) {
-      const newDoc = await db.collection('chauffeurs').add({ ...chauffeurData, createdAt: now });
-      chauffeurDocId = newDoc.id;
-    } else {
-      chauffeurDocId = chauffeurSnap.docs[0].id;
-      await chauffeurSnap.docs[0].ref.set(chauffeurData, { merge: true });
-    }
-
-    // Pas de URL custom ici: ça évite l’erreur auth/unauthorized-continue-uri.
-    const resetLink = await admin.auth().generatePasswordResetLink(email);
-
-    // Nécessite l’extension Firebase “Trigger Email” configurée sur la collection mail.
-    await db.collection('mail').add({
-      to: [email],
-      message: {
-        subject: 'Invitation - Gestion Camion Pro',
-        text: `Bonjour ${nom},\n\nVotre compte chauffeur a été créé. Cliquez sur ce lien pour créer votre mot de passe :\n${resetLink}\n\nEnsuite connectez-vous à Gestion Camion Pro avec votre email.`,
-        html: `<p>Bonjour ${nom},</p><p>Votre compte chauffeur a été créé.</p><p><a href="${resetLink}">Créer mon mot de passe</a></p><p>Ensuite connectez-vous à Gestion Camion Pro avec votre email.</p>`
-      },
-      createdAt: now
     });
 
-    return { ok: true, uid, email, chauffeurDocId, resetLink };
-  } catch (error) {
-    console.error('inviteDriver error:', error);
-    if (error instanceof HttpsError) throw error;
-    throw new HttpsError('internal', friendlyError(error));
-  }
-});
-
-exports.deleteDriver = onCall({ region: 'us-central1' }, async (request) => {
-  try {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Connexion requise.');
-    }
-
-    const adminDoc = await db.collection('users').doc(request.auth.uid).get();
-    if (!adminDoc.exists || adminDoc.data().role !== 'admin') {
-      throw new HttpsError('permission-denied', 'Seul un admin peut supprimer un chauffeur.');
-    }
-
-    const data = request.data || {};
-    const chauffeurDocId = cleanString(data.chauffeurDocId);
-    let uid = cleanString(data.uid);
-
-    if (!chauffeurDocId && !uid) {
-      throw new HttpsError('invalid-argument', 'UID ou document chauffeur obligatoire.');
-    }
-
-    let chauffeurRef = null;
-    let chauffeurSnap = null;
-
-    if (chauffeurDocId) {
-      chauffeurRef = db.collection('chauffeurs').doc(chauffeurDocId);
-      chauffeurSnap = await chauffeurRef.get();
-      if (!chauffeurSnap.exists) {
-        throw new HttpsError('not-found', 'Chauffeur introuvable.');
-      }
-      uid = uid || cleanString(chauffeurSnap.data().userId || chauffeurSnap.data().uid);
-    } else {
-      const qs = await db.collection('chauffeurs').where('userId', '==', uid).limit(1).get();
-      if (!qs.empty) {
-        chauffeurSnap = qs.docs[0];
-        chauffeurRef = chauffeurSnap.ref;
-      }
-    }
-
-    if (!uid) {
-      // Anciennes invitations/fiches sans compte Auth: on supprime seulement la fiche chauffeur.
-      if (chauffeurRef) {
-        await chauffeurRef.delete();
-        return { ok: true, uid: null, chauffeurDocId, authDeleted: false, note: 'Fiche chauffeur supprimée. Aucun compte Auth associé.' };
-      }
-      throw new HttpsError('invalid-argument', 'Ce chauffeur n’a pas de UID Auth et aucune fiche chauffeur n’a été trouvée.');
-    }
-
-    if (uid === request.auth.uid) {
-      throw new HttpsError('failed-precondition', 'Tu ne peux pas supprimer ton propre compte admin.');
-    }
-
-    const targetUserDoc = await db.collection('users').doc(uid).get();
-    if (targetUserDoc.exists && targetUserDoc.data().role === 'admin') {
-      throw new HttpsError('failed-precondition', 'Impossible de supprimer un compte admin avec le bouton chauffeur.');
-    }
-
-    const batch = db.batch();
-    if (chauffeurRef) batch.delete(chauffeurRef);
-    batch.delete(db.collection('users').doc(uid));
-    await batch.commit();
-
-    try {
-      await admin.auth().deleteUser(uid);
-    } catch (error) {
-      if (error.code !== 'auth/user-not-found') throw error;
-    }
-
-    return { ok: true, uid, chauffeurDocId: chauffeurDocId || (chauffeurSnap ? chauffeurSnap.id : null) };
-  } catch (error) {
-    console.error('deleteDriver error:', error);
-    if (error instanceof HttpsError) throw error;
-    throw new HttpsError('internal', friendlyError(error));
-  }
-});
+    return { ok: true, uid: userRecord.uid, chauffeurDocId: chauffeurRef.id };
+  });
