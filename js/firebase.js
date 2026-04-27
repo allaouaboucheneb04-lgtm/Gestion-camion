@@ -210,6 +210,35 @@ export async function getMesOdometres() {
   return listWhere("odometres", "chauffeurId", "==", user.uid, "date");
 }
 
+// Affectation camion journalière
+export async function setAffectationJour(data) {
+  const user = currentUser();
+  const dateKey = data.dateKey || new Date().toISOString().slice(0, 10);
+  const chauffeurId = data.chauffeurId || user?.uid || "";
+  const id = `${chauffeurId}_${dateKey}`;
+  return setDoc(doc(db, "affectations_journalieres", id), withTimestamp({
+    ...data,
+    chauffeurId,
+    dateKey,
+    createdBy: user?.uid || ""
+  }), { merge: true });
+}
+
+export async function getAffectationJour(chauffeurId, dateKey) {
+  const id = `${chauffeurId}_${dateKey}`;
+  const snap = await getDoc(doc(db, "affectations_journalieres", id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function getMesAffectationsJour() {
+  const user = currentUser();
+  return listWhere("affectations_journalieres", "chauffeurId", "==", user.uid, "dateKey");
+}
+
+export async function getAffectationsJour() {
+  return listRecords("affectations_journalieres", "dateKey");
+}
+
 export async function addEntretien(data) {
   return addRecord("entretien", data);
 }

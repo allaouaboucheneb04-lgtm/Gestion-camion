@@ -161,3 +161,11 @@ Cette version bloque les erreurs de kilométrage :
 
 Aucune nouvelle règle Firestore n’est nécessaire si les rules incluses sont publiées.
 Recharge recommandée : `?v=km-validation-pro1`.
+
+
+## Camion du jour / affectation flexible
+- L’assignation fixe n’est pas obligatoire.
+- Au début de journée, le chauffeur choisit le camion avec lequel il travaille.
+- L’admin peut changer le camion du jour depuis la liste des chauffeurs.
+- Cette affectation est enregistrée dans `affectations_journalieres` avec l’ID `chauffeurId_YYYY-MM-DD`.
+- Le camion choisi devient la valeur par défaut pour le KM du jour et l’ajout voyage.

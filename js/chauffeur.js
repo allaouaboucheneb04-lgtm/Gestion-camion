@@ -1,5 +1,5 @@
 import {
-  addVoyage, updateVoyage, deleteVoyage, getMesVoyages, getCamions, addOdometre, updateOdometre, getMesOdometres, getOdometres, uploadFile
+  addVoyage, updateVoyage, deleteVoyage, getMesVoyages, getCamions, addOdometre, updateOdometre, getMesOdometres, getOdometres, uploadFile, setAffectationJour, getAffectationJour
 } from "./firebase.js";
 import {
   money, formatDate, escapeHtml, formToObject, numberOrZero, dateTimeOrNull,
@@ -10,10 +10,30 @@ const state = {
   profile: null,
   voyages: [],
   camions: [],
-  odometres: []
+  odometres: [],
+  affectationJour: null
 };
 
 const KM_SUSPECT_JUMP = 2000;
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function camionLabel(camionId) {
+  const c = state.camions.find(x => x.id === camionId);
+  if (!c) return camionId || "Aucun camion";
+  return `${c.numeroCamion || "Camion"}${c.numeroPlaque ? " - " + c.numeroPlaque : ""}${c.marqueModele ? " · " + c.marqueModele : ""}`;
+}
+
+function selectedCamionId() {
+  return state.affectationJour?.camionId || localStorage.getItem(`camionJour_${state.profile?.id || ""}_${todayKey()}`) || "";
+}
+
+function camionOptions(selected = "") {
+  return state.camions.map(c => `<option value="${c.id}" ${c.id === selected ? "selected" : ""}>${escapeHtml(c.numeroCamion || "Camion")} - ${escapeHtml(c.numeroPlaque || "")}${c.marqueModele ? " · " + escapeHtml(c.marqueModele) : ""}</option>`).join("");
+}
+
 
 function normalizeDateKey(value) {
   if (!value) return "";
@@ -120,12 +140,35 @@ function dashboardHtml() {
   `;
 }
 
+
+function dailyTruckHtml() {
+  const selected = selectedCamionId();
+  const lockedMsg = selected
+    ? `Camion choisi aujourd’hui : <strong>${escapeHtml(camionLabel(selected))}</strong>. Tu peux le changer si nécessaire.`
+    : `Choisis le camion avec lequel tu travailles aujourd’hui. Cette sélection sera utilisée par défaut pour le KM et les voyages.`;
+  return `
+    <div class="card daily-truck-card">
+      <div class="card-header">
+        <div>
+          <h2>Camion du jour / شاحنة اليوم</h2>
+          <p class="muted">${lockedMsg}</p>
+        </div>
+      </div>
+      <form id="dailyTruckForm" class="form-grid">
+        <label class="full"><span>Choisir camion / اختر الشاحنة</span><select name="camionId" required><option value="">Choisir camion</option>${camionOptions(selected)}</select></label>
+        <button class="btn primary full" type="submit">Valider camion du jour</button>
+      </form>
+    </div>
+  `;
+}
+
 function formHtml() {
   return `
     <div class="card">
       <div class="card-header"><div><h2>Ajouter un voyage</h2><p class="muted">Le chauffeur ajoute uniquement ses voyages</p></div></div>
       <form id="driverTripForm" class="form-grid">
         <label><span>Type de voyage</span><select name="typeVoyage" data-trip-type required><option value="simple">Aller simple</option><option value="aller_retour">Aller-retour</option></select></label>
+        <label><span>Camion</span><select name="camionId" data-trip-camion required><option value="">Choisir camion</option>${camionOptions(selectedCamionId())}</select></label>
         <label><span>Nom du chauffeur</span><input name="nomChauffeur" value="${escapeHtml(state.profile.name || "")}" required></label>
         <label><span>Client aller</span><input name="client" required></label>
         <label><span>Départ aller</span><input name="depart" required></label>
@@ -162,13 +205,14 @@ function formHtml() {
 
 function odometerHtml() {
   const today = new Date().toISOString().slice(0, 10);
-  const camionOptions = state.camions.map(c => `<option value="${c.id}">${escapeHtml(c.numeroCamion || "Camion")} - ${escapeHtml(c.numeroPlaque || "")}</option>`).join("");
+  const selected = selectedCamionId();
+  const options = camionOptions(selected);
   return `
     <div class="card odometer-card">
       <div class="card-header"><div><h2>KM du jour / عداد اليوم</h2><p class="muted">Chaque jour, inscris le kilométrage. La photo de l’odomètre est optionnelle : si tu l’ajoutes, elle sera envoyée par email.</p></div></div>
       <form id="odometerForm" class="form-grid">
         <label><span>Date / التاريخ</span><input name="date" type="date" value="${today}" required></label>
-        <label><span>Camion / الشاحنة</span><select name="camionId" data-km-camion required><option value="">Choisir camion</option>${camionOptions}</select></label>\n        <div class="full km-validation-hint" data-km-hint>Choisis un camion pour voir le dernier KM enregistré.</div>
+        <label><span>Camion / الشاحنة</span><select name="camionId" data-km-camion required><option value="">Choisir camion</option>${options}</select></label>\n        <div class="full km-validation-hint" data-km-hint>Choisis un camion pour voir le dernier KM enregistré.</div>
         <label><span>Kilométrage compteur / الكيلومترات</span><input name="kilometrage" type="number" step="1" min="0" required></label>
         <label class="full"><span>Photo odomètre optionnelle / صورة العداد اختيارية</span><input type="file" name="odometrePhoto" accept="image/*" capture="environment"></label>
         <label class="full"><span>Remarque / ملاحظة</span><textarea name="remarque" placeholder="Optionnel"></textarea></label>
@@ -218,7 +262,7 @@ function tripsHtml() {
 
 function render() {
   document.getElementById("driverDashboard").innerHTML = dashboardHtml();
-  document.getElementById("driverFormView").innerHTML = odometerHtml() + formHtml();
+  document.getElementById("driverFormView").innerHTML = dailyTruckHtml() + odometerHtml() + formHtml();
   document.getElementById("driverTripsView").innerHTML = tripsHtml();
   bindForm();
   bindActions();
@@ -226,6 +270,7 @@ function render() {
 
 async function refreshData() {
   [state.voyages, state.camions, state.odometres] = await Promise.all([getMesVoyages(), getCamions(), getMesOdometres()]);
+  state.affectationJour = state.profile?.id ? await getAffectationJour(state.profile.id, todayKey()).catch(() => null) : null;
   render();
 }
 
@@ -355,6 +400,25 @@ function bindKmValidationHint() {
 function bindForm() {
   bindTripTypeToggle(document);
   bindKmValidationHint();
+
+  document.getElementById("dailyTruckForm")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const camionId = form.camionId.value;
+    if (!camionId) return alert("Choisis un camion.");
+    await setAffectationJour({
+      chauffeurId: state.profile.id,
+      nomChauffeur: state.profile.name || "",
+      camionId,
+      camionLabel: camionLabel(camionId),
+      dateKey: todayKey(),
+      source: "chauffeur"
+    });
+    localStorage.setItem(`camionJour_${state.profile.id}_${todayKey()}`, camionId);
+    alert("Camion du jour enregistré ✅");
+    await refreshData();
+  });
+
   document.getElementById("odometerForm")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -404,6 +468,8 @@ function bindForm() {
     const form = e.currentTarget;
     const data = formToObject(form);
     data.chauffeurId = state.profile.id;
+    data.camionId = data.camionId || selectedCamionId();
+    if (!data.camionId) { alert("Choisir un camion pour ce voyage."); return; }
     data.typeVoyage = data.typeVoyage || "simple";
     if (data.typeVoyage !== "aller_retour") {
       data.retourClient = "";
