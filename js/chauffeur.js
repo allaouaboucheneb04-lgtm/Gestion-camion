@@ -1,5 +1,5 @@
 import {
-  addVoyage, updateVoyage, deleteVoyage, getMesVoyages, getCamions, addOdometre, updateOdometre, getMesOdometres, uploadFile
+  addVoyage, updateVoyage, deleteVoyage, getMesVoyages, getCamions, addOdometre, updateOdometre, getMesOdometres, getOdometres, uploadFile
 } from "./firebase.js";
 import {
   money, formatDate, escapeHtml, formToObject, numberOrZero, dateTimeOrNull,
@@ -12,6 +12,66 @@ const state = {
   camions: [],
   odometres: []
 };
+
+const KM_SUSPECT_JUMP = 2000;
+
+function normalizeDateKey(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value.slice(0, 10);
+  if (typeof value?.toDate === "function") return value.toDate().toISOString().slice(0, 10);
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const d = new Date(value);
+  return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : "";
+}
+
+function findLastOdometerForTruck(odometres, camionId) {
+  return (odometres || [])
+    .filter(o => o.camionId === camionId && Number(o.kilometrage) > 0)
+    .sort((a, b) => Number(b.kilometrage || 0) - Number(a.kilometrage || 0))[0] || null;
+}
+
+async function getAllOdometersSafe() {
+  try {
+    return await getOdometres();
+  } catch (error) {
+    console.warn("Lecture globale odomètres impossible, fallback mes odomètres", error);
+    return state.odometres || [];
+  }
+}
+
+async function validateOdometerBeforeSave(data) {
+  const camionId = data.camionId;
+  const km = Number(data.kilometrage || 0);
+  const dateKey = normalizeDateKey(data.date);
+
+  if (!camionId) throw new Error("Choisis un camion.");
+  if (!Number.isFinite(km) || km <= 0) throw new Error("Le kilométrage doit être supérieur à 0.");
+
+  const allOdometers = await getAllOdometersSafe();
+  const sameDay = allOdometers.find(o => o.camionId === camionId && normalizeDateKey(o.date) === dateKey);
+  if (sameDay) {
+    throw new Error(`KM déjà enregistré pour ce camion à cette date. Dernier saisi: ${sameDay.kilometrage || "-"} km.`);
+  }
+
+  const last = findLastOdometerForTruck(allOdometers, camionId);
+  if (last) {
+    const lastKm = Number(last.kilometrage || 0);
+    if (km <= lastKm) {
+      throw new Error(`KM invalide. Le nouveau KM (${km.toLocaleString("fr-CA")}) doit être supérieur au dernier KM enregistré (${lastKm.toLocaleString("fr-CA")}).`);
+    }
+    const diff = km - lastKm;
+    if (diff > KM_SUSPECT_JUMP) {
+      const ok = confirm(`⚠️ KM suspect: +${diff.toLocaleString("fr-CA")} km depuis le dernier relevé (${lastKm.toLocaleString("fr-CA")}).\n\nContinuer quand même ?`);
+      if (!ok) throw new Error("Enregistrement annulé: KM suspect à vérifier.");
+      data.kmAlerte = true;
+      data.kmAlerteMessage = `Saut élevé: +${diff} km depuis ${lastKm}`;
+    }
+  }
+
+  data.kmPrecedent = last ? Number(last.kilometrage || 0) : 0;
+  data.kmDifference = data.kmPrecedent ? km - data.kmPrecedent : 0;
+  return data;
+}
 
 function voyageRevenue(v) {
   return numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour);
@@ -108,7 +168,7 @@ function odometerHtml() {
       <div class="card-header"><div><h2>KM du jour / عداد اليوم</h2><p class="muted">Chaque jour, inscris le kilométrage. La photo de l’odomètre est optionnelle : si tu l’ajoutes, elle sera envoyée par email.</p></div></div>
       <form id="odometerForm" class="form-grid">
         <label><span>Date / التاريخ</span><input name="date" type="date" value="${today}" required></label>
-        <label><span>Camion / الشاحنة</span><select name="camionId" required><option value="">Choisir camion</option>${camionOptions}</select></label>
+        <label><span>Camion / الشاحنة</span><select name="camionId" data-km-camion required><option value="">Choisir camion</option>${camionOptions}</select></label>\n        <div class="full km-validation-hint" data-km-hint>Choisis un camion pour voir le dernier KM enregistré.</div>
         <label><span>Kilométrage compteur / الكيلومترات</span><input name="kilometrage" type="number" step="1" min="0" required></label>
         <label class="full"><span>Photo odomètre optionnelle / صورة العداد اختيارية</span><input type="file" name="odometrePhoto" accept="image/*" capture="environment"></label>
         <label class="full"><span>Remarque / ملاحظة</span><textarea name="remarque" placeholder="Optionnel"></textarea></label>
@@ -123,7 +183,7 @@ function odometerHtml() {
             <h4>${escapeHtml(o.kilometrage || "-")} km <span class="badge">${formatDate(o.date)}</span></h4>
             <p>Camion : ${escapeHtml(camion?.numeroCamion || o.camionId || "-")}</p>
             ${o.remarque ? `<p>Remarque : ${escapeHtml(o.remarque)}</p>` : ""}
-            ${o.photoEmailSent ? `<p><span class="badge success">Photo envoyée par email</span></p>` : ""}
+            ${o.kmAlerte ? `<p><span class="badge danger">KM suspect vérifié</span> ${escapeHtml(o.kmAlerteMessage || "")}</p>` : ""}\n            ${o.kmDifference ? `<p>Différence depuis dernier relevé : ${Number(o.kmDifference).toLocaleString("fr-CA")} km</p>` : ""}\n            ${o.photoEmailSent ? `<p><span class="badge success">Photo envoyée par email</span></p>` : ""}
           </div>`;
         }).join("") : `<div class="item-card"><p>Aucun kilométrage enregistré.</p></div>`}
       </div>
@@ -267,8 +327,34 @@ function bindTripTypeToggle(root = document) {
   });
 }
 
+function bindKmValidationHint() {
+  const select = document.querySelector("[data-km-camion]");
+  const hint = document.querySelector("[data-km-hint]");
+  if (!select || !hint) return;
+  const update = async () => {
+    const camionId = select.value;
+    if (!camionId) {
+      hint.textContent = "Choisis un camion pour voir le dernier KM enregistré.";
+      hint.className = "full km-validation-hint";
+      return;
+    }
+    const all = await getAllOdometersSafe();
+    const last = findLastOdometerForTruck(all, camionId);
+    if (!last) {
+      hint.textContent = "Aucun ancien KM pour ce camion. Premier relevé.";
+      hint.className = "full km-validation-hint success";
+      return;
+    }
+    hint.textContent = `Dernier KM enregistré pour ce camion : ${Number(last.kilometrage || 0).toLocaleString("fr-CA")} km. Le nouveau KM doit être supérieur.`;
+    hint.className = "full km-validation-hint warning";
+  };
+  select.addEventListener("change", () => update().catch(console.error));
+  update().catch(console.error);
+}
+
 function bindForm() {
   bindTripTypeToggle(document);
+  bindKmValidationHint();
   document.getElementById("odometerForm")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -279,6 +365,13 @@ function bindForm() {
     data.kilometrage = numberOrZero(data.kilometrage);
     data.date = data.date ? new Date(data.date + "T12:00:00") : new Date();
     delete data.odometrePhoto;
+
+    try {
+      await validateOdometerBeforeSave(data);
+    } catch (validationError) {
+      alert(validationError.message || "KM invalide");
+      return;
+    }
 
     let photoEmailSent = false;
     let photoEmailError = "";
@@ -323,6 +416,10 @@ function bindForm() {
       data.gasoilRetour = 0;
     }
     ["prixCourse","gasoil","fraisMission","prixCourseRetour","fraisMissionRetour","gasoilRetour","kmDepart","kmArrivee"].forEach(k => data[k] = numberOrZero(data[k]));
+    if (data.kmDepart && data.kmArrivee && data.kmArrivee <= data.kmDepart) {
+      alert("KM arrivée doit être supérieur au KM départ.");
+      return;
+    }
     ["dateDepart","dateArrivee","dateRetour","dateRetourArrivee"].forEach(k => data[k] = dateTimeOrNull(data[k]));
     const file = form.voyageFile.files[0];
     delete data.voyageFile;

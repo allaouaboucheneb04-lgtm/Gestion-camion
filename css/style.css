@@ -484,3 +484,29 @@ html[dir="rtl"] .maintenance-mini-card { direction: rtl; }
 .status-pill.repair.en_cours { background: #ffedd5; color: #9a3412; }
 .status-pill.repair.repare { background: #dcfce7; color: #166534; }
 .btn.warning { background: #f59e0b; color: #fff; border-color: #f59e0b; }
+
+
+/* Validation KM Pro */
+.km-validation-hint {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+.km-validation-hint.warning {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+.km-validation-hint.success {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+.badge.danger {
+  background: #fee2e2;
+  color: #991b1b;
+}

@@ -147,3 +147,17 @@ Quand l’entretien passe à **Réparé**, l’application enregistre `dateRepar
 - Le dashboard et la page Alertes entretien utilisent ce KM de départ pour recalculer les cercles.
 
 Exemple: camion à 150000 km, vidange faite, intervalle 10000 km. Le cercle repart à 0% et deviendra 50% à 155000 km.
+
+
+## Validation KM Pro
+
+Cette version bloque les erreurs de kilométrage :
+
+- le chauffeur ne peut pas enregistrer un KM inférieur ou égal au dernier KM du camion ;
+- un seul relevé KM par camion et par date est accepté ;
+- si le saut dépasse 2 000 km, l’app affiche une alerte “KM suspect” et demande confirmation ;
+- le relevé sauvegarde `kmPrecedent`, `kmDifference`, `kmAlerte` et `kmAlerteMessage` ;
+- dans les voyages, `KM arrivée` doit être supérieur à `KM départ`.
+
+Aucune nouvelle règle Firestore n’est nécessaire si les rules incluses sont publiées.
+Recharge recommandée : `?v=km-validation-pro1`.
