@@ -6,16 +6,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function userExists() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function myRole() {
+      return userExists() ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role : null;
+    }
+
     function isAdmin() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+      return signedIn() && myRole() == "admin";
     }
 
     function isDriver() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "chauffeur";
+      return signedIn() && myRole() == "chauffeur";
     }
 
     function isSelf(uid) {
@@ -24,9 +28,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAdmin() || isSelf(userId);
-      allow create: if isAdmin();
+      allow create: if isAdmin() || isSelf(userId);
       allow update: if isAdmin() || isSelf(userId);
-      // Suppression complète par Cloud Function deleteDriver seulement.
       allow delete: if false;
     }
 
@@ -38,7 +41,6 @@ service cloud.firestore {
     match /chauffeurs/{id} {
       allow read: if isAdmin() || (isDriver() && resource.data.userId == request.auth.uid);
       allow create, update: if isAdmin();
-      // Suppression complète par Cloud Function deleteDriver seulement.
       allow delete: if false;
     }
 
@@ -49,6 +51,22 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
     }
 
+    // Nom utilisé par le projet actuel
+    match /odometres/{id} {
+      allow read: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
+      allow create: if isAdmin() || (isDriver() && request.resource.data.chauffeurId == request.auth.uid);
+      allow update: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid && request.resource.data.chauffeurId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // Ancien nom accepté aussi pour éviter les blocages si une page l'utilise encore
+    match /km_journalier/{id} {
+      allow read: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
+      allow create: if isAdmin() || (isDriver() && request.resource.data.chauffeurId == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     match /entretien/{id} {
       allow read: if signedIn();
       allow create, update, delete: if isAdmin();
@@ -57,14 +75,6 @@ service cloud.firestore {
     match /depenses/{id} {
       allow read: if signedIn();
       allow create, update, delete: if isAdmin();
-    }
-
-    // KM journalier sans stockage photo. La photo optionnelle est envoyée par email.
-    match /odometres/{id} {
-      allow read: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
-      allow create: if isAdmin() || (isDriver() && request.resource.data.chauffeurId == request.auth.uid);
-      allow update: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid && request.resource.data.chauffeurId == request.auth.uid);
-      allow delete: if isAdmin();
     }
 
     match /parametres/{id} {

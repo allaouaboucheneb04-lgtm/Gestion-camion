@@ -75,7 +75,7 @@ function dashboardHtml() {
       <div class="card stat-card"><div class="label">Chauffeurs actifs</div><div class="value">${state.chauffeurs.filter(c => (c.status || "actif") === "actif").length}</div></div>
       <div class="card stat-card"><div class="label">Revenu total</div><div class="value">${money(revenu)}</div></div>
       <div class="card stat-card"><div class="label">Bénéfice estimé</div><div class="value">${money(benefice)}</div></div>
-      <div class="card stat-card"><div class="label">Photos KM</div><div class="value">${kmJour}</div></div>
+      <div class="card stat-card"><div class="label">KM journaliers</div><div class="value">${kmJour}</div></div>
     </div>
 
     <div class="card">
@@ -482,10 +482,27 @@ function render() {
   bindActions();
 }
 
+async function safeLoad(label, loader) {
+  try {
+    return await loader();
+  } catch (error) {
+    console.error(`Erreur chargement ${label}`, error);
+    alert(`Erreur chargement ${label}: ${error?.message || error}`);
+    return [];
+  }
+}
+
 async function refreshData() {
-  [state.camions, state.chauffeurs, state.voyages, state.entretien, state.depenses, state.odometres] = await Promise.all([
-    getCamions(), getChauffeurs(), getVoyages(), getEntretiens(), getDepenses(), getOdometres()
+  const results = await Promise.all([
+    safeLoad("camions", getCamions),
+    safeLoad("chauffeurs", getChauffeurs),
+    safeLoad("voyages", getVoyages),
+    safeLoad("entretien", getEntretiens),
+    safeLoad("depenses", getDepenses),
+    safeLoad("KM journaliers", getOdometres)
   ]);
+
+  [state.camions, state.chauffeurs, state.voyages, state.entretien, state.depenses, state.odometres] = results;
   render();
 }
 
