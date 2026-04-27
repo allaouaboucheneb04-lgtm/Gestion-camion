@@ -149,23 +149,14 @@ Quand l’entretien passe à **Réparé**, l’application enregistre `dateRepar
 Exemple: camion à 150000 km, vidange faite, intervalle 10000 km. Le cercle repart à 0% et deviendra 50% à 155000 km.
 
 
-## Validation KM Pro
+## Version Entreprise Finale
+- Menu chauffeur latéral pro : KM du jour, Voyages, Dépenses, Paramètres.
+- KM du jour affiché en premier.
+- Le chauffeur choisit un camion dans KM et dans Voyage.
+- Voyage : aller simple / aller-retour, retour indépendant, KM départ / arrivée.
+- Validation KM : bloque KM inférieur/égal au dernier, double saisie du jour, alerte saut +2000 km.
+- Dépenses chauffeur : enregistrées avec `status: a_valider` pour validation admin.
+- Entretien intelligent : statut réparé et reset dernierEntretien du camion.
+- Alertes configurables : collection `alertes_entretien`.
 
-Cette version bloque les erreurs de kilométrage :
-
-- le chauffeur ne peut pas enregistrer un KM inférieur ou égal au dernier KM du camion ;
-- un seul relevé KM par camion et par date est accepté ;
-- si le saut dépasse 2 000 km, l’app affiche une alerte “KM suspect” et demande confirmation ;
-- le relevé sauvegarde `kmPrecedent`, `kmDifference`, `kmAlerte` et `kmAlerteMessage` ;
-- dans les voyages, `KM arrivée` doit être supérieur à `KM départ`.
-
-Aucune nouvelle règle Firestore n’est nécessaire si les rules incluses sont publiées.
-Recharge recommandée : `?v=km-validation-pro1`.
-
-
-## Camion du jour / affectation flexible
-- L’assignation fixe n’est pas obligatoire.
-- Au début de journée, le chauffeur choisit le camion avec lequel il travaille.
-- L’admin peut changer le camion du jour depuis la liste des chauffeurs.
-- Cette affectation est enregistrée dans `affectations_journalieres` avec l’ID `chauffeurId_YYYY-MM-DD`.
-- Le camion choisi devient la valeur par défaut pour le KM du jour et l’ajout voyage.
+Recharge le site avec `?v=entreprise-finale1`.

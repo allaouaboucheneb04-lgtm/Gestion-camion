@@ -1,5 +1,5 @@
 import {
-  addVoyage, updateVoyage, deleteVoyage, getMesVoyages, getCamions, addOdometre, updateOdometre, getMesOdometres, getOdometres, uploadFile, setAffectationJour, getAffectationJour, addDepense, getDepenses
+  addVoyage, updateVoyage, deleteVoyage, getMesVoyages, getCamions, addOdometre, updateOdometre, getMesOdometres, uploadFile, addDepense
 } from "./firebase.js";
 import {
   money, formatDate, escapeHtml, formToObject, numberOrZero, dateTimeOrNull,
@@ -10,90 +10,8 @@ const state = {
   profile: null,
   voyages: [],
   camions: [],
-  odometres: [],
-  depenses: [],
-  affectationJour: null,
-  activeView: localStorage.getItem("chauffeurActiveView") || "km"
+  odometres: []
 };
-
-const KM_SUSPECT_JUMP = 2000;
-
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function camionLabel(camionId) {
-  const c = state.camions.find(x => x.id === camionId);
-  if (!c) return camionId || "Aucun camion";
-  return `${c.numeroCamion || "Camion"}${c.numeroPlaque ? " - " + c.numeroPlaque : ""}${c.marqueModele ? " · " + c.marqueModele : ""}`;
-}
-
-function selectedCamionId() {
-  return state.affectationJour?.camionId || localStorage.getItem(`camionJour_${state.profile?.id || ""}_${todayKey()}`) || "";
-}
-
-function camionOptions(selected = "") {
-  return state.camions.map(c => `<option value="${c.id}" ${c.id === selected ? "selected" : ""}>${escapeHtml(c.numeroCamion || "Camion")} - ${escapeHtml(c.numeroPlaque || "")}${c.marqueModele ? " · " + escapeHtml(c.marqueModele) : ""}</option>`).join("");
-}
-
-
-function normalizeDateKey(value) {
-  if (!value) return "";
-  if (typeof value === "string") return value.slice(0, 10);
-  if (typeof value?.toDate === "function") return value.toDate().toISOString().slice(0, 10);
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  const d = new Date(value);
-  return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : "";
-}
-
-function findLastOdometerForTruck(odometres, camionId) {
-  return (odometres || [])
-    .filter(o => o.camionId === camionId && Number(o.kilometrage) > 0)
-    .sort((a, b) => Number(b.kilometrage || 0) - Number(a.kilometrage || 0))[0] || null;
-}
-
-async function getAllOdometersSafe() {
-  try {
-    return await getOdometres();
-  } catch (error) {
-    console.warn("Lecture globale odomètres impossible, fallback mes odomètres", error);
-    return state.odometres || [];
-  }
-}
-
-async function validateOdometerBeforeSave(data) {
-  const camionId = data.camionId;
-  const km = Number(data.kilometrage || 0);
-  const dateKey = normalizeDateKey(data.date);
-
-  if (!camionId) throw new Error("Choisis un camion.");
-  if (!Number.isFinite(km) || km <= 0) throw new Error("Le kilométrage doit être supérieur à 0.");
-
-  const allOdometers = await getAllOdometersSafe();
-  const sameDay = allOdometers.find(o => o.camionId === camionId && normalizeDateKey(o.date) === dateKey);
-  if (sameDay) {
-    throw new Error(`KM déjà enregistré pour ce camion à cette date. Dernier saisi: ${sameDay.kilometrage || "-"} km.`);
-  }
-
-  const last = findLastOdometerForTruck(allOdometers, camionId);
-  if (last) {
-    const lastKm = Number(last.kilometrage || 0);
-    if (km <= lastKm) {
-      throw new Error(`KM invalide. Le nouveau KM (${km.toLocaleString("fr-CA")}) doit être supérieur au dernier KM enregistré (${lastKm.toLocaleString("fr-CA")}).`);
-    }
-    const diff = km - lastKm;
-    if (diff > KM_SUSPECT_JUMP) {
-      const ok = confirm(`⚠️ KM suspect: +${diff.toLocaleString("fr-CA")} km depuis le dernier relevé (${lastKm.toLocaleString("fr-CA")}).\n\nContinuer quand même ?`);
-      if (!ok) throw new Error("Enregistrement annulé: KM suspect à vérifier.");
-      data.kmAlerte = true;
-      data.kmAlerteMessage = `Saut élevé: +${diff} km depuis ${lastKm}`;
-    }
-  }
-
-  data.kmPrecedent = last ? Number(last.kilometrage || 0) : 0;
-  data.kmDifference = data.kmPrecedent ? km - data.kmPrecedent : 0;
-  return data;
-}
 
 function voyageRevenue(v) {
   return numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour);
@@ -142,35 +60,13 @@ function dashboardHtml() {
   `;
 }
 
-
-function dailyTruckHtml() {
-  const selected = selectedCamionId();
-  const lockedMsg = selected
-    ? `Camion choisi aujourd’hui : <strong>${escapeHtml(camionLabel(selected))}</strong>. Tu peux le changer si nécessaire.`
-    : `Choisis le camion avec lequel tu travailles aujourd’hui. Cette sélection sera utilisée par défaut pour le KM et les voyages.`;
-  return `
-    <div class="card daily-truck-card">
-      <div class="card-header">
-        <div>
-          <h2>Camion du jour / شاحنة اليوم</h2>
-          <p class="muted">${lockedMsg}</p>
-        </div>
-      </div>
-      <form id="dailyTruckForm" class="form-grid">
-        <label class="full"><span>Choisir camion / اختر الشاحنة</span><select name="camionId" required><option value="">Choisir camion</option>${camionOptions(selected)}</select></label>
-        <button class="btn primary full" type="submit">Valider camion du jour</button>
-      </form>
-    </div>
-  `;
-}
-
 function formHtml() {
   return `
     <div class="card">
       <div class="card-header"><div><h2>Ajouter un voyage</h2><p class="muted">Le chauffeur ajoute uniquement ses voyages</p></div></div>
       <form id="driverTripForm" class="form-grid">
         <label><span>Type de voyage</span><select name="typeVoyage" data-trip-type required><option value="simple">Aller simple</option><option value="aller_retour">Aller-retour</option></select></label>
-        <label><span>Camion</span><select name="camionId" data-trip-camion required><option value="">Choisir camion</option>${camionOptions(selectedCamionId())}</select></label>
+        <label><span>Camion</span><select name="camionId" required><option value="">Choisir camion</option>${state.camions.map(c => `<option value="${c.id}">${escapeHtml(c.numeroCamion || "Camion")} - ${escapeHtml(c.numeroPlaque || "")}</option>`).join("")}</select></label>
         <label><span>Nom du chauffeur</span><input name="nomChauffeur" value="${escapeHtml(state.profile.name || "")}" required></label>
         <label><span>Client aller</span><input name="client" required></label>
         <label><span>Départ aller</span><input name="depart" required></label>
@@ -207,14 +103,13 @@ function formHtml() {
 
 function odometerHtml() {
   const today = new Date().toISOString().slice(0, 10);
-  const selected = selectedCamionId();
-  const options = camionOptions(selected);
+  const camionOptions = state.camions.map(c => `<option value="${c.id}">${escapeHtml(c.numeroCamion || "Camion")} - ${escapeHtml(c.numeroPlaque || "")}</option>`).join("");
   return `
     <div class="card odometer-card">
       <div class="card-header"><div><h2>KM du jour / عداد اليوم</h2><p class="muted">Chaque jour, inscris le kilométrage. La photo de l’odomètre est optionnelle : si tu l’ajoutes, elle sera envoyée par email.</p></div></div>
       <form id="odometerForm" class="form-grid">
         <label><span>Date / التاريخ</span><input name="date" type="date" value="${today}" required></label>
-        <label><span>Camion / الشاحنة</span><select name="camionId" data-km-camion required><option value="">Choisir camion</option>${options}</select></label>\n        <div class="full km-validation-hint" data-km-hint>Choisis un camion pour voir le dernier KM enregistré.</div>
+        <label><span>Camion / الشاحنة</span><select name="camionId" required><option value="">Choisir camion</option>${camionOptions}</select></label>
         <label><span>Kilométrage compteur / الكيلومترات</span><input name="kilometrage" type="number" step="1" min="0" required></label>
         <label class="full"><span>Photo odomètre optionnelle / صورة العداد اختيارية</span><input type="file" name="odometrePhoto" accept="image/*" capture="environment"></label>
         <label class="full"><span>Remarque / ملاحظة</span><textarea name="remarque" placeholder="Optionnel"></textarea></label>
@@ -229,75 +124,12 @@ function odometerHtml() {
             <h4>${escapeHtml(o.kilometrage || "-")} km <span class="badge">${formatDate(o.date)}</span></h4>
             <p>Camion : ${escapeHtml(camion?.numeroCamion || o.camionId || "-")}</p>
             ${o.remarque ? `<p>Remarque : ${escapeHtml(o.remarque)}</p>` : ""}
-            ${o.kmAlerte ? `<p><span class="badge danger">KM suspect vérifié</span> ${escapeHtml(o.kmAlerteMessage || "")}</p>` : ""}\n            ${o.kmDifference ? `<p>Différence depuis dernier relevé : ${Number(o.kmDifference).toLocaleString("fr-CA")} km</p>` : ""}\n            ${o.photoEmailSent ? `<p><span class="badge success">Photo envoyée par email</span></p>` : ""}
+            ${o.photoEmailSent ? `<p><span class="badge success">Photo envoyée par email</span></p>` : ""}
           </div>`;
         }).join("") : `<div class="item-card"><p>Aucun kilométrage enregistré.</p></div>`}
       </div>
     </div>
   `;
-}
-
-function mesDepenses() {
-  return (state.depenses || []).filter(d => d.chauffeurId === state.profile?.id || d.createdBy === state.profile?.id);
-}
-
-function depensesHtml() {
-  const selected = selectedCamionId();
-  const depenses = mesDepenses();
-  const total = depenses.reduce((s, d) => s + numberOrZero(d.montant), 0);
-  return `
-    <div class="card">
-      <div class="card-header"><div><h2>Dépenses chauffeur / مصاريف السائق</h2><p class="muted">Ajoute tes dépenses liées à la journée ou au voyage. L’admin les verra dans son espace.</p></div></div>
-      <form id="driverDepenseForm" class="form-grid">
-        <label><span>Type</span><select name="type" required>
-          <option value="gasoil">Gasoil</option>
-          <option value="frais_mission">Frais de mission</option>
-          <option value="peage">Péage</option>
-          <option value="parking">Parking</option>
-          <option value="autre">Autre</option>
-        </select></label>
-        <label><span>Camion</span><select name="camionId"><option value="">Sans camion</option>${camionOptions(selected)}</select></label>
-        <label><span>Montant DZD</span><input name="montant" type="number" step="0.01" min="0" required></label>
-        <label><span>Date</span><input name="date" type="date" value="${todayKey()}"></label>
-        <label class="full"><span>Description / ملاحظة</span><textarea name="description" placeholder="Ex: gasoil, repas, péage..."></textarea></label>
-        <button class="btn primary full" type="submit">Ajouter dépense</button>
-      </form>
-    </div>
-    <div class="card">
-      <div class="card-header"><div><h2>Mes dépenses</h2><p class="muted">Total : <strong>${money(total)}</strong></p></div></div>
-      <div class="list">
-        ${depenses.length ? depenses.slice(0, 20).map(d => `
-          <div class="item-card">
-            <h4>${escapeHtml(d.type || "Dépense")} <span class="badge">${money(d.montant)}</span></h4>
-            <p>Date : ${formatDate(d.date || d.createdAt)} | Camion : ${escapeHtml(camionLabel(d.camionId))}</p>
-            ${d.description ? `<p>${escapeHtml(d.description)}</p>` : ""}
-          </div>
-        `).join("") : `<div class="item-card"><p>Aucune dépense enregistrée.</p></div>`}
-      </div>
-    </div>
-  `;
-}
-
-function parametresHtml() {
-  return `
-    <div class="card">
-      <div class="card-header"><div><h2>Paramètres chauffeur / الإعدادات</h2><p class="muted">Informations du compte et camion du jour.</p></div></div>
-      <div class="info-grid">
-        <div class="item-card"><h4>Nom</h4><p>${escapeHtml(state.profile?.name || "-")}</p></div>
-        <div class="item-card"><h4>Email</h4><p>${escapeHtml(state.profile?.email || "-")}</p></div>
-        <div class="item-card"><h4>Rôle</h4><p>${escapeHtml(state.profile?.role || "chauffeur")}</p></div>
-        <div class="item-card"><h4>Camion du jour</h4><p>${escapeHtml(camionLabel(selectedCamionId()))}</p></div>
-      </div>
-      <p class="muted">Pour modifier le mot de passe, utilise le bouton “Mot de passe oublié” dans la page connexion.</p>
-    </div>
-  `;
-}
-
-function mainViewHtml() {
-  if (state.activeView === "voyages") return formHtml() + tripsHtml();
-  if (state.activeView === "depenses") return depensesHtml();
-  if (state.activeView === "parametres") return dailyTruckHtml() + parametresHtml();
-  return dailyTruckHtml() + odometerHtml();
 }
 
 function tripsHtml() {
@@ -325,34 +157,59 @@ function tripsHtml() {
   `;
 }
 
-function bindDriverMenu() {
-  document.querySelectorAll("[data-driver-view]").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.driverView === state.activeView);
-    btn.onclick = () => {
-      state.activeView = btn.dataset.driverView;
-      localStorage.setItem("chauffeurActiveView", state.activeView);
-      render();
-    };
+function depensesHtml() {
+  const camionOptions = state.camions.map(c => `<option value="${c.id}">${escapeHtml(c.numeroCamion || "Camion")} - ${escapeHtml(c.numeroPlaque || "")}</option>`).join("");
+  return `
+    <div class="card">
+      <div class="card-header"><div><h2>Ajouter une dépense</h2><p class="muted">Dépense chauffeur envoyée à l’admin.</p></div></div>
+      <form id="driverExpenseForm" class="form-grid">
+        <label><span>Camion</span><select name="camionId"><option value="">Aucun / général</option>${camionOptions}</select></label>
+        <label><span>Type</span><select name="type"><option>Gasoil</option><option>Péage</option><option>Repas</option><option>Réparation route</option><option>Autre</option></select></label>
+        <label><span>Montant</span><input name="montant" type="number" step="0.01" required></label>
+        <label><span>Date</span><input name="date" type="date" value="${new Date().toISOString().slice(0,10)}"></label>
+        <label class="full"><span>Description</span><textarea name="description" placeholder="Détail de la dépense"></textarea></label>
+        <button class="btn primary full" type="submit">Enregistrer dépense</button>
+      </form>
+    </div>`;
+}
+
+function settingsHtml() {
+  return `
+    <div class="card">
+      <div class="card-header"><div><h2>Paramètres chauffeur</h2><p class="muted">Compte et sécurité.</p></div></div>
+      <div class="driver-quick-grid">
+        <div class="item-card"><h4>Profil</h4><p>${escapeHtml(state.profile.name || "-")}</p><p>${escapeHtml(state.profile.email || "-")}</p></div>
+        <div class="item-card"><h4>Statut</h4><span class="status-pill">${escapeHtml(state.profile.status || "actif")}</span></div>
+      </div>
+      <button class="btn secondary" id="driverResetPasswordBtn" style="margin-top:14px">Modifier / réinitialiser mot de passe</button>
+    </div>`;
+}
+
+function bindDriverNav() {
+  document.querySelectorAll("[data-driver-nav]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("[data-driver-nav]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      document.querySelectorAll(".driver-page").forEach(p => p.classList.remove("active"));
+      document.getElementById("page-" + btn.dataset.driverNav)?.classList.add("active");
+    });
   });
 }
 
 function render() {
   document.getElementById("driverDashboard").innerHTML = dashboardHtml();
-  const main = document.getElementById("driverMainView");
-  if (main) main.innerHTML = mainViewHtml();
-  bindDriverMenu();
+  document.getElementById("driverFormView").innerHTML = odometerHtml();
+  document.getElementById("driverTripFormView").innerHTML = formHtml();
+  document.getElementById("driverTripsView").innerHTML = tripsHtml();
+  document.getElementById("driverDepensesView").innerHTML = depensesHtml();
+  document.getElementById("driverSettingsView").innerHTML = settingsHtml();
+  bindDriverNav();
   bindForm();
   bindActions();
 }
 
 async function refreshData() {
-  [state.voyages, state.camions, state.odometres, state.depenses] = await Promise.all([
-    getMesVoyages(),
-    getCamions(),
-    getMesOdometres(),
-    getDepenses().catch(() => [])
-  ]);
-  state.affectationJour = state.profile?.id ? await getAffectationJour(state.profile.id, todayKey()).catch(() => null) : null;
+  [state.voyages, state.camions, state.odometres] = await Promise.all([getMesVoyages(), getCamions(), getMesOdometres()]);
   render();
 }
 
@@ -454,53 +311,8 @@ function bindTripTypeToggle(root = document) {
   });
 }
 
-function bindKmValidationHint() {
-  const select = document.querySelector("[data-km-camion]");
-  const hint = document.querySelector("[data-km-hint]");
-  if (!select || !hint) return;
-  const update = async () => {
-    const camionId = select.value;
-    if (!camionId) {
-      hint.textContent = "Choisis un camion pour voir le dernier KM enregistré.";
-      hint.className = "full km-validation-hint";
-      return;
-    }
-    const all = await getAllOdometersSafe();
-    const last = findLastOdometerForTruck(all, camionId);
-    if (!last) {
-      hint.textContent = "Aucun ancien KM pour ce camion. Premier relevé.";
-      hint.className = "full km-validation-hint success";
-      return;
-    }
-    hint.textContent = `Dernier KM enregistré pour ce camion : ${Number(last.kilometrage || 0).toLocaleString("fr-CA")} km. Le nouveau KM doit être supérieur.`;
-    hint.className = "full km-validation-hint warning";
-  };
-  select.addEventListener("change", () => update().catch(console.error));
-  update().catch(console.error);
-}
-
 function bindForm() {
   bindTripTypeToggle(document);
-  bindKmValidationHint();
-
-  document.getElementById("dailyTruckForm")?.addEventListener("submit", async e => {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const camionId = form.camionId.value;
-    if (!camionId) return alert("Choisis un camion.");
-    await setAffectationJour({
-      chauffeurId: state.profile.id,
-      nomChauffeur: state.profile.name || "",
-      camionId,
-      camionLabel: camionLabel(camionId),
-      dateKey: todayKey(),
-      source: "chauffeur"
-    });
-    localStorage.setItem(`camionJour_${state.profile.id}_${todayKey()}`, camionId);
-    alert("Camion du jour enregistré ✅");
-    await refreshData();
-  });
-
   document.getElementById("odometerForm")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -511,13 +323,6 @@ function bindForm() {
     data.kilometrage = numberOrZero(data.kilometrage);
     data.date = data.date ? new Date(data.date + "T12:00:00") : new Date();
     delete data.odometrePhoto;
-
-    try {
-      await validateOdometerBeforeSave(data);
-    } catch (validationError) {
-      alert(validationError.message || "KM invalide");
-      return;
-    }
 
     let photoEmailSent = false;
     let photoEmailError = "";
@@ -534,6 +339,22 @@ function bindForm() {
       }
     }
 
+    const sameDay = state.odometres.find(o => o.camionId === data.camionId && new Date(o.date).toISOString().slice(0,10) === new Date(data.date).toISOString().slice(0,10));
+    if (sameDay) {
+      alert("❌ KM déjà enregistré pour ce camion aujourd’hui.");
+      return;
+    }
+    const lastForCamion = state.odometres
+      .filter(o => o.camionId === data.camionId)
+      .sort((a,b) => numberOrZero(b.kilometrage) - numberOrZero(a.kilometrage))[0];
+    if (lastForCamion && data.kilometrage <= numberOrZero(lastForCamion.kilometrage)) {
+      alert("❌ KM invalide. Dernier KM du camion: " + numberOrZero(lastForCamion.kilometrage));
+      return;
+    }
+    if (lastForCamion && data.kilometrage > numberOrZero(lastForCamion.kilometrage) + 2000) {
+      if (!confirm("⚠️ KM suspect (+2000 km). Confirmer quand même ?")) return;
+    }
+
     await addOdometre({
       ...data,
       photoEmailSent,
@@ -545,29 +366,11 @@ function bindForm() {
     await refreshData();
   });
 
-  document.getElementById("driverDepenseForm")?.addEventListener("submit", async e => {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const data = formToObject(form);
-    data.chauffeurId = state.profile.id;
-    data.nomChauffeur = state.profile.name || "";
-    data.montant = numberOrZero(data.montant);
-    data.date = data.date ? new Date(data.date + "T12:00:00") : new Date();
-    if (!data.type) return alert("Choisir un type de dépense.");
-    if (!data.montant || data.montant <= 0) return alert("Montant obligatoire.");
-    await addDepense(data);
-    form.reset();
-    alert("Dépense ajoutée ✅");
-    await refreshData();
-  });
-
   document.getElementById("driverTripForm")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.currentTarget;
     const data = formToObject(form);
     data.chauffeurId = state.profile.id;
-    data.camionId = data.camionId || selectedCamionId();
-    if (!data.camionId) { alert("Choisir un camion pour ce voyage."); return; }
     data.typeVoyage = data.typeVoyage || "simple";
     if (data.typeVoyage !== "aller_retour") {
       data.retourClient = "";
@@ -580,11 +383,9 @@ function bindForm() {
       data.gasoilRetour = 0;
     }
     ["prixCourse","gasoil","fraisMission","prixCourseRetour","fraisMissionRetour","gasoilRetour","kmDepart","kmArrivee"].forEach(k => data[k] = numberOrZero(data[k]));
-    if (data.kmDepart && data.kmArrivee && data.kmArrivee <= data.kmDepart) {
-      alert("KM arrivée doit être supérieur au KM départ.");
-      return;
-    }
     ["dateDepart","dateArrivee","dateRetour","dateRetourArrivee"].forEach(k => data[k] = dateTimeOrNull(data[k]));
+    if (!data.camionId) { alert("❌ Choisir un camion"); return; }
+    if (data.kmArrivee && data.kmDepart && data.kmArrivee <= data.kmDepart) { alert("❌ KM arrivée doit être supérieur au KM départ"); return; }
     const file = form.voyageFile.files[0];
     delete data.voyageFile;
     const ref = await addVoyage(data);
@@ -593,11 +394,32 @@ function bindForm() {
       await updateVoyage(ref.id, { documentUrl: url });
     }
     form.reset();
-    state.activeView = "km";
-    localStorage.setItem("chauffeurActiveView", "km");
-    alert("Voyage ajouté ✅. Inscris ou vérifie maintenant le KM du jour.");
     await refreshData();
+    document.querySelector('[data-driver-nav="km"]')?.click();
   });
+
+  document.getElementById("driverExpenseForm")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const data = formToObject(form);
+    data.montant = numberOrZero(data.montant);
+    data.date = data.date ? new Date(data.date + "T12:00:00") : new Date();
+    data.chauffeurId = state.profile.id;
+    data.nomChauffeur = state.profile.name || "";
+    data.status = "a_valider";
+    await addDepense(data);
+    form.reset();
+    alert("Dépense enregistrée ✅");
+  });
+
+  document.getElementById("driverResetPasswordBtn")?.addEventListener("click", async () => {
+    if (!state.profile.email) return alert("Email introuvable");
+    const { sendPasswordResetEmail } = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js");
+    const { auth } = await import("./firebase-config.js");
+    await sendPasswordResetEmail(auth, state.profile.email);
+    alert("Lien de réinitialisation envoyé ✅");
+  });
+
 }
 
 async function init() {

@@ -2,33 +2,21 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    function userExists() {
-      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-
-    function myRole() {
-      return userExists() ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role : null;
-    }
-
+    function signedIn() { return request.auth != null; }
     function isAdmin() {
-      return signedIn() && myRole() == "admin";
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
     }
-
     function isDriver() {
-      return signedIn() && myRole() == "chauffeur";
-    }
-
-    function isSelf(uid) {
-      return signedIn() && request.auth.uid == uid;
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "chauffeur";
     }
 
     match /users/{userId} {
-      allow read: if isAdmin() || isSelf(userId);
-      allow create, update: if isAdmin() || isSelf(userId);
+      allow read: if isAdmin() || request.auth.uid == userId;
+      allow create, update: if isAdmin() || request.auth.uid == userId;
       allow delete: if false;
     }
 
@@ -51,20 +39,10 @@ service cloud.firestore {
     }
 
     match /odometres/{id} {
-      allow read: if signedIn();
+      allow read: if isAdmin() || isDriver();
       allow create: if isAdmin() || (isDriver() && request.resource.data.chauffeurId == request.auth.uid);
-      allow update: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid && request.resource.data.chauffeurId == request.auth.uid);
-      allow delete: if isAdmin();
+      allow update, delete: if isAdmin();
     }
-
-    match /km_journalier/{id} {
-      allow read: if signedIn();
-      allow create: if isAdmin() || (isDriver() && request.resource.data.chauffeurId == request.auth.uid);
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-
 
     match /affectations_journalieres/{id} {
       allow read: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
@@ -84,13 +62,8 @@ service cloud.firestore {
     }
 
     match /depenses/{id} {
-      // Admin voit tout. Chauffeur peut lire les dépenses afin que l’app filtre ses propres dépenses côté interface.
-      allow read: if signedIn();
-
-      // Admin crée toutes les dépenses. Chauffeur crée seulement une dépense liée à son UID.
+      allow read: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
       allow create: if isAdmin() || (isDriver() && request.resource.data.chauffeurId == request.auth.uid);
-
-      // Modification/suppression réservée à l’admin pour garder les comptes propres.
       allow update, delete: if isAdmin();
     }
 

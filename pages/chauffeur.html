@@ -3,43 +3,48 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chauffeur - Gestion Camion Algérie Pro</title>
-  <link rel="stylesheet" href="../css/style.css?v=chauffeur-menu1" />
+  <title>Chauffeur - Gestion Camion Entreprise</title>
+  <link rel="stylesheet" href="../css/style.css?v=enterprise1" />
 </head>
-<body>
-  <div class="app-shell">
-    <aside class="sidebar chauffeur-sidebar">
-      <div class="brand">
-        <div class="brand-mark">🚛</div>
-        <div>
-          <h2>Chauffeur</h2>
-          <small>لوحة السائق</small>
-        </div>
-      </div>
-      <nav class="menu chauffeur-menu">
-        <button class="menu-item active" data-driver-view="km">KM du jour</button>
-        <button class="menu-item" data-driver-view="voyages">Voyages</button>
-        <button class="menu-item" data-driver-view="depenses">Dépenses</button>
-        <button class="menu-item" data-driver-view="parametres">Paramètres</button>
-      </nav>
+<body class="driver-pro-body">
+  <div class="driver-layout">
+    <aside class="driver-sidebar">
+      <div class="driver-brand"><div class="brand-mark small">GC</div><div><strong>Chauffeur</strong><span id="driverWelcome">Chargement...</span></div></div>
+      <button class="driver-nav active" data-driver-nav="km">📍 KM du jour</button>
+      <button class="driver-nav" data-driver-nav="voyages">🚚 Voyages</button>
+      <button class="driver-nav" data-driver-nav="depenses">💳 Dépenses</button>
+      <button class="driver-nav" data-driver-nav="parametres">⚙️ Paramètres</button>
+      <button id="logoutBtn" class="driver-nav danger-nav">Déconnexion</button>
     </aside>
-    <main class="main">
-      <div class="mobile-head">
-        <div>
-          <h1>Mon espace chauffeur</h1>
-          <p class="muted" id="driverWelcome">Chargement...</p>
-        </div>
-        <button id="logoutBtn" class="btn danger">Déconnexion</button>
-      </div>
 
-      <section id="driverDashboard" class="section-space"></section>
-      <section id="driverMainView" class="section-space"></section>
+    <main class="driver-main">
+      <section id="page-km" class="driver-page active">
+        <div class="page-title"><h1>KM du jour</h1><p class="muted">Le chauffeur commence par choisir le camion et inscrire le kilométrage.</p></div>
+        <section id="driverDashboard" class="section-space"></section>
+        <section id="driverFormView" class="section-space"></section>
+      </section>
+
+      <section id="page-voyages" class="driver-page">
+        <div class="page-title"><h1>Voyages</h1><p class="muted">Ajouter et consulter les voyages du chauffeur.</p></div>
+        <section id="driverTripFormView" class="section-space"></section>
+        <section id="driverTripsView" class="section-space"></section>
+      </section>
+
+      <section id="page-depenses" class="driver-page">
+        <div class="page-title"><h1>Dépenses</h1><p class="muted">Dépenses saisies par le chauffeur pour validation admin.</p></div>
+        <section id="driverDepensesView" class="section-space"></section>
+      </section>
+
+      <section id="page-parametres" class="driver-page">
+        <div class="page-title"><h1>Paramètres</h1><p class="muted">Profil et sécurité.</p></div>
+        <section id="driverSettingsView" class="section-space"></section>
+      </section>
     </main>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-  <script src="../js/email-config.js?v=chauffeur-menu1"></script>
-  <script type="module" src="../js/chauffeur.js?v=chauffeur-menu1"></script>
-  <script type="module" src="../js/i18n.js?v=chauffeur-menu1"></script>
+  <script src="../js/email-config.js?v=enterprise1"></script>
+  <script type="module" src="../js/chauffeur.js?v=enterprise1"></script>
+  <script type="module" src="../js/i18n.js?v=enterprise1"></script>
 </body>
 </html>

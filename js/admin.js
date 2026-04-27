@@ -6,7 +6,7 @@ import {
   addEntretien, updateEntretien, deleteEntretien, getEntretiens,
   addAlerteEntretien, updateAlerteEntretien, deleteAlerteEntretien, getAlertesEntretien,
   addDepense, updateDepense, deleteDepense, getDepenses,
-  uploadFile, setAffectationJour, getAffectationsJour
+  uploadFile
 } from "./firebase.js";
 import {
   money, formatDate, escapeHtml, formToObject, numberOrZero, dateTimeOrNull,
@@ -43,8 +43,7 @@ const state = {
   depenses: [],
   odometres: [],
   selectedChauffeurId: null,
-  chauffeurFilter: "actif",
-  affectations: []
+  chauffeurFilter: "actif"
 };
 
 function setActiveView(name) {
@@ -461,7 +460,6 @@ function chauffeursHtml() {
               <p><strong>Permis</strong><br>${escapeHtml(c.numeroPermis || "-")}</p>
               <p><strong>Revenu</strong><br>${money(revenu)}</p>
               <p><strong>Dernier KM</strong><br>${lastKm?.kilometrage || "-"}</p>
-              <p><strong>Camion du jour</strong><br>${escapeHtml(camionName((state.affectations || []).find(a => a.chauffeurId === uid && a.dateKey === new Date().toISOString().slice(0,10))?.camionId) || "-")}</p>
             </div>
             <p class="muted">Adresse : ${escapeHtml(c.adresse || "-")}</p>
             ${c.documentUrl ? `<p><a href="${c.documentUrl}" target="_blank" rel="noopener">Voir permis / document</a></p>` : ""}
@@ -469,7 +467,6 @@ function chauffeursHtml() {
               <button class="btn primary" data-detail-chauffeur="${c.id}">Détails</button>
               <button class="btn secondary" data-edit-chauffeur="${c.id}">Modifier</button>
               <button class="btn secondary" data-reset-password="${c.id}">Mot de passe</button>
-              <button class="btn secondary" data-assign-camion="${c.id}">Camion du jour</button>
               ${isInactive ? `<button class="btn success" data-enable-chauffeur="${c.id}">Réactiver</button>` : `<button class="btn danger" data-disable-chauffeur="${c.id}">Désactiver</button>`}
             </div>
           </div>`;
@@ -884,7 +881,6 @@ async function refreshData() {
   ]);
 
   [state.camions, state.chauffeurs, state.voyages, state.entretien, state.alertesEntretien, state.depenses, state.odometres] = results;
-  state.affectations = await getAffectationsJour().catch(() => []);
   render();
 }
 
@@ -962,30 +958,6 @@ function bindActions() {
     } catch (error) {
       displayError(error, "Réactivation chauffeur");
     }
-  }));
-
-
-  document.querySelectorAll("[data-assign-camion]").forEach(btn => btn.addEventListener("click", async () => {
-    const chauffeur = pickForEdit(state.chauffeurs, btn.dataset.assignCamion);
-    if (!chauffeur || !chauffeur.userId) return alert("Ce chauffeur n’a pas de UID valide.");
-    if (!state.camions.length) return alert("Aucun camion disponible.");
-    const choices = state.camions.map((c, i) => `${i + 1}. ${c.numeroCamion || "Camion"} - ${c.numeroPlaque || ""}`).join("\n");
-    const index = prompt(`Choisir camion du jour pour ${chauffeur.nom || "chauffeur"}:\n${choices}\n\nEntre le numéro:`);
-    if (index === null) return;
-    const camion = state.camions[Number(index) - 1];
-    if (!camion) return alert("Choix invalide.");
-    const dateKey = new Date().toISOString().slice(0, 10);
-    await setAffectationJour({
-      chauffeurId: chauffeur.userId,
-      nomChauffeur: chauffeur.nom || "",
-      camionId: camion.id,
-      camionLabel: camionName(camion.id),
-      dateKey,
-      source: "admin"
-    });
-    alert("Camion du jour changé ✅");
-    await refreshData();
-    setActiveView("chauffeurs");
   }));
 
   document.querySelectorAll("[data-reset-password]").forEach(btn => btn.addEventListener("click", async () => {
