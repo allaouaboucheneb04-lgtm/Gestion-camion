@@ -18,7 +18,8 @@ const state = {
   chauffeurs: [],
   voyages: [],
   entretien: [],
-  depenses: []
+  depenses: [],
+  selectedChauffeurId: null
 };
 
 function setActiveView(name) {
@@ -103,6 +104,94 @@ function camionsListHtml() {
     </div>`;
 }
 
+
+function fullDate(value) {
+  if (!value) return "-";
+  try {
+    const d = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
+    if (Number.isNaN(d.getTime())) return "-";
+    return d.toLocaleString("fr-CA");
+  } catch {
+    return "-";
+  }
+}
+
+function chauffeurDetailsHtml(chauffeur) {
+  if (!chauffeur) return "";
+  const uid = chauffeur.userId || "";
+  const voyages = state.voyages.filter(v => v.chauffeurId === uid);
+  const depenses = state.depenses.filter(d => d.chauffeurId === uid || d.chauffeurId === chauffeur.id);
+  const revenu = voyages.reduce((s, v) => s + numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour), 0);
+  const gasoil = voyages.reduce((s, v) => s + numberOrZero(v.gasoil) + numberOrZero(v.gasoilRetour), 0);
+  const fraisMission = voyages.reduce((s, v) => s + numberOrZero(v.fraisMission) + numberOrZero(v.fraisMissionRetour), 0);
+  const autresDepenses = depenses.reduce((s, d) => s + numberOrZero(d.montant), 0);
+  const net = revenu - gasoil - fraisMission - autresDepenses;
+
+  return `
+    <div class="card detail-card" id="chauffeurDetailsCard">
+      <div class="card-header">
+        <div>
+          <h2>Détails chauffeur : ${escapeHtml(chauffeur.nom || "-")}</h2>
+          <p class="muted">Profil, invitation, voyages et performance</p>
+        </div>
+        <button class="btn secondary" data-close-chauffeur-details>Fermer</button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="card stat-card"><div class="label">Voyages</div><div class="value">${voyages.length}</div></div>
+        <div class="card stat-card"><div class="label">Revenu</div><div class="value">${money(revenu)}</div></div>
+        <div class="card stat-card"><div class="label">Coûts</div><div class="value">${money(gasoil + fraisMission + autresDepenses)}</div></div>
+        <div class="card stat-card"><div class="label">Net estimé</div><div class="value">${money(net)}</div></div>
+      </div>
+
+      <div class="grid detail-grid">
+        <div class="item-card">
+          <h4>Informations personnelles</h4>
+          <p><strong>Nom :</strong> ${escapeHtml(chauffeur.nom || "-")}</p>
+          <p><strong>Email :</strong> ${escapeHtml(chauffeur.invitedEmail || chauffeur.email || "-")}</p>
+          <p><strong>Téléphone :</strong> ${escapeHtml(chauffeur.telephone || "-")}</p>
+          <p><strong>Adresse :</strong> ${escapeHtml(chauffeur.adresse || "-")}</p>
+          <p><strong>UID :</strong> ${escapeHtml(uid || "-")}</p>
+        </div>
+        <div class="item-card">
+          <h4>Travail / permis</h4>
+          <p><strong>Numéro chauffeur :</strong> ${escapeHtml(chauffeur.numeroChauffeur || "-")}</p>
+          <p><strong>Numéro permis :</strong> ${escapeHtml(chauffeur.numeroPermis || "-")}</p>
+          <p><strong>Kilométrage après 10 voyages :</strong> ${escapeHtml(chauffeur.kilometrageApres10Voyages || "-")}</p>
+          <p><strong>Statut invitation :</strong> ${escapeHtml(chauffeur.statutInvitation || "-")}</p>
+          <p><strong>Créé le :</strong> ${fullDate(chauffeur.createdAt)}</p>
+          ${chauffeur.documentUrl ? `<p><a href="${chauffeur.documentUrl}" target="_blank" rel="noopener">Voir permis / document</a></p>` : ""}
+        </div>
+      </div>
+
+      <div class="item-card">
+        <h4>Voyages de ce chauffeur</h4>
+        ${voyages.length ? voyages.map(v => `
+          <div class="item-card">
+            <h4>${escapeHtml(v.client || "-")} → ${escapeHtml(v.destination || "-")}</h4>
+            <p>Départ : ${formatDate(v.dateDepart)} | Arrivée : ${formatDate(v.dateArrivee)}</p>
+            <p>Prix aller : ${money(v.prixCourse)} | Retour : ${money(v.prixCourseRetour)}</p>
+            <p>Gasoil : ${money(numberOrZero(v.gasoil) + numberOrZero(v.gasoilRetour))} | Frais mission : ${money(numberOrZero(v.fraisMission) + numberOrZero(v.fraisMissionRetour))}</p>
+            ${v.documentUrl ? `<p><a href="${v.documentUrl}" target="_blank" rel="noopener">Voir document voyage</a></p>` : ""}
+          </div>
+        `).join("") : `<p class="muted">Aucun voyage enregistré pour ce chauffeur.</p>`}
+      </div>
+
+      <div class="item-card">
+        <h4>Dépenses liées au chauffeur</h4>
+        ${depenses.length ? depenses.map(d => `
+          <div class="item-card">
+            <h4>${escapeHtml(d.type || "-")}</h4>
+            <p>Montant : ${money(d.montant)} | Date : ${formatDate(d.date)}</p>
+            <p>${escapeHtml(d.description || "-")}</p>
+            ${d.documentUrl ? `<p><a href="${d.documentUrl}" target="_blank" rel="noopener">Voir reçu</a></p>` : ""}
+          </div>
+        `).join("") : `<p class="muted">Aucune dépense liée directement à ce chauffeur.</p>`}
+      </div>
+    </div>
+  `;
+}
+
 function chauffeursHtml() {
   return `
     <div class="card">
@@ -121,7 +210,7 @@ function chauffeursHtml() {
     </div>
 
     <div class="card">
-      <div class="card-header"><div><h2>Liste des chauffeurs</h2><p class="muted">Documents et données métier</p></div></div>
+      <div class="card-header"><div><h2>Liste des chauffeurs</h2><p class="muted">Clique sur Détails pour voir le profil complet, voyages et statistiques</p></div></div>
       <div class="list">
         ${state.chauffeurs.length ? state.chauffeurs.map(c => `
           <div class="item-card">
@@ -135,6 +224,7 @@ function chauffeursHtml() {
             <p>Kilométrage après 10 voyages : ${escapeHtml(c.kilometrageApres10Voyages || "-")}</p>
             ${c.documentUrl ? `<p><a href="${c.documentUrl}" target="_blank" rel="noopener">Voir le document</a></p>` : ""}
             <div class="actions">
+              <button class="btn primary" data-detail-chauffeur="${c.id}">Détails</button>
               <button class="btn secondary" data-edit-chauffeur="${c.id}">Modifier</button>
               <button class="btn danger" data-delete-chauffeur="${c.id}">Supprimer</button>
             </div>
@@ -142,6 +232,7 @@ function chauffeursHtml() {
         `).join("") : `<div class="item-card"><p>Aucun chauffeur pour le moment.</p></div>`}
       </div>
     </div>
+    ${chauffeurDetailsHtml(pickForEdit(state.chauffeurs, state.selectedChauffeurId))}
   `;
 }
 
@@ -352,6 +443,18 @@ function bindActions() {
     if (!update) return;
     await updateCamion(item.id, update);
     await refreshData();
+  }));
+
+  document.querySelectorAll("[data-detail-chauffeur]").forEach(btn => btn.addEventListener("click", () => {
+    state.selectedChauffeurId = btn.dataset.detailChauffeur;
+    render();
+    setActiveView("chauffeurs");
+    setTimeout(() => document.getElementById("chauffeurDetailsCard")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }));
+  document.querySelectorAll("[data-close-chauffeur-details]").forEach(btn => btn.addEventListener("click", () => {
+    state.selectedChauffeurId = null;
+    render();
+    setActiveView("chauffeurs");
   }));
 
   document.querySelectorAll("[data-delete-chauffeur]").forEach(btn => btn.addEventListener("click", async () => {

@@ -122,3 +122,9 @@ Installe l'extension Firebase `firestore-send-email` et choisis la collection `m
 
 ### Important
 Sans Cloud Functions + Trigger Email, le bouton invitation ne pourra pas envoyer le mail automatiquement.
+
+
+## Mise à jour - détails chauffeur dans admin
+
+Dans l’espace Admin > Chauffeurs, un bouton **Détails** est ajouté pour chaque chauffeur.
+Il affiche : profil complet, statut invitation, document/permis, voyages, dépenses liées, revenu, coûts et bénéfice net estimé.
