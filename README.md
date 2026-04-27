@@ -77,7 +77,7 @@ Si EmailJS n'est pas configuré, le KM sera quand même enregistré, mais l'emai
 - Admin > Stats KM affiche les statistiques par camion et chauffeur.
 - Collection principale utilisée: `odometres`.
 - Les rules autorisent la lecture des relevés KM aux utilisateurs connectés pour éviter le blocage dashboard.
-- Publie `firestore.rules`, remplace les fichiers, puis recharge avec `?v=statskm1`.
+- Publie `firestore.rules`, remplace les fichiers, puis recharge avec `?v=entretien1`.
 
 
 ## Mise à jour KM Pro avancé
@@ -89,7 +89,7 @@ Si EmailJS n'est pas configuré, le KM sera quand même enregistré, mais l'emai
 - Calcul coût/km et bénéfice/km.
 - Nouvelle section Stats KM: rentabilité voyages + alertes relevés KM.
 
-Après upload, recharge avec `?v=kmpro2`.
+Après upload, recharge avec `?v=entretien1`.
 
 ## Mise à jour C — Voyage aller simple / aller-retour
 
@@ -101,4 +101,15 @@ Cette version inclut :
 - calculs de rentabilité : distance, consommation / 100 km, coût / km, bénéfice / km
 - alertes entretien dans Stats KM Pro
 
-Recharge conseillé : `?v=finalproC`
+Recharge conseillé : `?v=entretien1`
+
+## Mise à jour Entretien Pro
+
+Ajouté dans cette version :
+- page Admin > Alertes entretien
+- section Suivi entretien dans le Dashboard
+- cercle de progression par entretien/camion
+- champs dans Entretien : KM lors entretien + Intervalle prochain entretien
+- couleurs : vert OK, orange bientôt, rouge dépassé
+
+Recharge le site avec : `?v=entretien1`

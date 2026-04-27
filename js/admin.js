@@ -61,6 +61,73 @@ function bindMenu() {
   });
 }
 
+
+function lastKmForCamion(camionId) {
+  const rows = state.odometres
+    .filter(r => r.camionId === camionId)
+    .sort((a,b) => dateMillis(b.date || b.createdAt) - dateMillis(a.date || a.createdAt));
+  return rows.length ? kmNumber(rows[0]) : 0;
+}
+
+function defaultEntretienInterval(type) {
+  const t = String(type || '').toLowerCase();
+  if (t.includes('vidange')) return 10000;
+  if (t.includes('pneu')) return 50000;
+  if (t.includes('piece') || t.includes('pièce')) return 30000;
+  if (t.includes('reparation') || t.includes('réparation')) return 20000;
+  return 10000;
+}
+
+function entretienProgress(item) {
+  const currentKm = lastKmForCamion(item.camionId);
+  const startKm = numberOrZero(item.kmEntretien || item.kmService || item.kmDepart || item.km || 0);
+  const intervalKm = numberOrZero(item.intervalKm || item.prochainKm || defaultEntretienInterval(item.type));
+  const usedKm = Math.max(0, currentKm - startKm);
+  const percent = intervalKm > 0 ? Math.min(100, Math.round((usedKm / intervalKm) * 100)) : 0;
+  const remainingKm = Math.max(0, intervalKm - usedKm);
+  let status = 'ok';
+  if (percent >= 100) status = 'danger';
+  else if (percent >= 80) status = 'warning';
+  return { currentKm, startKm, intervalKm, usedKm, percent, remainingKm, status };
+}
+
+function entretienProgressCircle(item, compact = false) {
+  const p = entretienProgress(item);
+  return `<div class="maintenance-circle-wrap ${p.status} ${compact ? 'compact' : ''}">
+    <div class="maintenance-circle" style="--p:${p.percent}">
+      <span>${p.percent}%</span>
+    </div>
+    <div class="maintenance-circle-info">
+      <strong>${p.remainingKm.toLocaleString('fr-CA')} km restants</strong>
+      <small>Actuel: ${p.currentKm.toLocaleString('fr-CA')} km · Départ entretien: ${p.startKm.toLocaleString('fr-CA')} km</small>
+    </div>
+  </div>`;
+}
+
+function entretienAlerts() {
+  return state.entretien
+    .filter(e => e.camionId)
+    .map(e => ({ ...e, progress: entretienProgress(e) }))
+    .sort((a,b) => b.progress.percent - a.progress.percent);
+}
+
+function dashboardEntretienHtml() {
+  const items = entretienAlerts().slice(0, 6);
+  return `
+    <div class="card maintenance-dashboard-card">
+      <div class="card-header"><div><h2>Suivi entretien</h2><p class="muted">Progression kilométrage par camion et type d'entretien.</p></div><button class="btn secondary" data-go-alertes>Voir alertes</button></div>
+      <div class="maintenance-grid">
+        ${items.length ? items.map(e => `
+          <div class="maintenance-mini-card">
+            <div><h4>${escapeHtml(camionName(e.camionId))}</h4><p>${escapeHtml(e.type || 'Entretien')}</p></div>
+            ${entretienProgressCircle(e, true)}
+          </div>
+        `).join('') : `<div class="item-card"><p>Aucun entretien avec kilométrage. Ajoute un entretien avec KM entretien et intervalle KM.</p></div>`}
+      </div>
+    </div>
+  `;
+}
+
 function dashboardHtml() {
   const revenu = state.voyages.reduce((s, v) => s + voyageRevenue(v), 0);
   const coutsVoyages = state.voyages.reduce((s, v) => s + voyageCosts(v), 0);
@@ -86,6 +153,8 @@ function dashboardHtml() {
         <div class="item-card"><h4>Autres dépenses</h4><p>${money(autresDepenses)}</p></div>
       </div>
     </div>
+
+    ${dashboardEntretienHtml()}
   `;
 }
 
@@ -391,6 +460,8 @@ function entretienHtml() {
         <label><span>Coût</span><input name="cout" type="number" step="0.01"></label>
         <label><span>Date</span><input name="date" type="datetime-local"></label>
         <label><span>Garage</span><input name="garage"></label>
+        <label><span>KM lors entretien</span><input name="kmEntretien" type="number" placeholder="Ex: 125000"></label>
+        <label><span>Intervalle prochain entretien (km)</span><input name="intervalKm" type="number" placeholder="Ex: 10000"></label>
         <label><span>Remorque ?</span><select name="remorque"><option value="false">Non</option><option value="true">Oui</option></select></label>
         <label class="full"><span>Description</span><textarea name="description"></textarea></label>
         <label class="full"><span>Facture / photo (optionnel)</span><input type="file" name="entretienFile" accept="image/*,.pdf"></label>
@@ -407,6 +478,7 @@ function entretienHtml() {
             <p>Coût : ${money(e.cout)} | Date : ${formatDate(e.date)}</p>
             <p>Garage : ${escapeHtml(e.garage || "-")} | Remorque : ${e.remorque ? "Oui" : "Non"}</p>
             <p>Description : ${escapeHtml(e.description || "-")}</p>
+            ${entretienProgressCircle(e, true)}
             ${e.documentUrl ? `<p><a href="${e.documentUrl}" target="_blank" rel="noopener">Voir la facture</a></p>` : ""}
             <div class="actions">
               <button class="btn secondary" data-edit-entretien="${e.id}">Modifier</button>
@@ -414,6 +486,38 @@ function entretienHtml() {
             </div>
           </div>
         `).join("") : `<div class="item-card"><p>Aucun entretien pour le moment.</p></div>`}
+      </div>
+    </div>
+  `;
+}
+
+
+function alertesEntretienHtml() {
+  const items = entretienAlerts();
+  const danger = items.filter(x => x.progress.status === 'danger').length;
+  const warning = items.filter(x => x.progress.status === 'warning').length;
+  return `
+    <div class="card maintenance-hero">
+      <div><p class="eyebrow">Alertes entretien</p><h2>Contrôle entretien par kilométrage</h2><p class="muted">Chaque cercle montre où le camion est arrivé par rapport au prochain entretien.</p></div>
+      <div class="driver-mini-stats"><div><strong>${items.length}</strong><span>Suivis</span></div><div><strong>${warning}</strong><span>À surveiller</span></div><div><strong>${danger}</strong><span>Urgents</span></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div><h2>Camions à surveiller</h2><p class="muted">Vert = OK, orange = bientôt, rouge = entretien dépassé.</p></div></div>
+      <div class="maintenance-list">
+        ${items.length ? items.map(e => `
+          <div class="maintenance-alert-card ${e.progress.status}">
+            <div class="maintenance-alert-main">
+              <div><h3>${escapeHtml(camionName(e.camionId))}</h3><p>${escapeHtml(e.type || 'Entretien')} · ${formatDate(e.date)}</p><p class="muted">Garage: ${escapeHtml(e.garage || '-')} · Coût: ${money(e.cout)}</p></div>
+              ${entretienProgressCircle(e)}
+            </div>
+            <div class="maintenance-details">
+              <span>Intervalle: ${e.progress.intervalKm.toLocaleString('fr-CA')} km</span>
+              <span>KM utilisés: ${e.progress.usedKm.toLocaleString('fr-CA')} km</span>
+              <span>Restant: ${e.progress.remainingKm.toLocaleString('fr-CA')} km</span>
+            </div>
+            ${e.progress.status === 'danger' ? '<div class="alert-text danger">Entretien dépassé: planifie une intervention.</div>' : e.progress.status === 'warning' ? '<div class="alert-text warning">Attention: entretien bientôt nécessaire.</div>' : '<div class="alert-text ok">Situation normale.</div>'}
+          </div>
+        `).join('') : `<div class="item-card"><p>Aucune alerte. Ajoute des entretiens avec KM entretien et intervalle KM.</p></div>`}
       </div>
     </div>
   `;
@@ -612,6 +716,7 @@ function render() {
   document.getElementById("chauffeursView").innerHTML = chauffeursHtml();
   document.getElementById("voyagesView").innerHTML = voyagesHtml();
   document.getElementById("entretienView").innerHTML = entretienHtml();
+  document.getElementById("alertesEntretienView").innerHTML = alertesEntretienHtml();
   document.getElementById("depensesView").innerHTML = depensesHtml();
   const statsView = document.getElementById("statskmView");
   if (statsView) statsView.innerHTML = statsKmHtml();
@@ -908,6 +1013,8 @@ function bindForms() {
     const form = e.currentTarget;
     const data = formToObject(form);
     data.cout = numberOrZero(data.cout);
+    data.kmEntretien = numberOrZero(data.kmEntretien);
+    data.intervalKm = numberOrZero(data.intervalKm) || defaultEntretienInterval(data.type);
     data.date = dateTimeOrNull(data.date);
     data.remorque = data.remorque === "true";
     const file = form.entretienFile.files[0];
