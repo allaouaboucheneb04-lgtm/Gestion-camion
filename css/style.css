@@ -387,3 +387,10 @@ html[dir="rtl"] .btn.primary {
 html[dir="rtl"] .btn.primary:hover {
   filter: brightness(.96);
 }
+
+
+/* Odomètre quotidien */
+.odometer-card { border: 1px solid #dbeafe; }
+.odometer-list h3 { margin: 18px 0 10px; }
+.odometer-item { border-left: 5px solid #2563eb; }
+html[dir="rtl"] .odometer-item { border-left: 0; border-right: 5px solid #2563eb; text-align: right; }

@@ -1,4 +1,4 @@
-const CACHE_NAME = "gestion-camion-algerie-bilingue-v1";
+const CACHE_NAME = "gestion-camion-algerie-km-v1";
 const ASSETS = ["./","./index.html","./css/style.css","./js/firebase-config.js","./js/firebase.js","./js/common.js","./js/login.js","./js/admin.js","./js/chauffeur.js","./js/i18n.js","./pages/admin.html","./pages/chauffeur.html"];
 self.addEventListener("install", event => { self.skipWaiting(); event.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS).catch(() => null))); });
 self.addEventListener("activate", event => { event.waitUntil((async()=>{ const keys=await caches.keys(); await Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k))); await self.clients.claim(); })()); });

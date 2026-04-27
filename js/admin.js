@@ -2,7 +2,7 @@ import {
   addCamion, updateCamion, deleteCamion, getCamions,
   addChauffeur, updateChauffeur, deleteChauffeur, getChauffeurs,
   inviteDriverAccount, createDriverAuthAccount, saveUserProfile, sendPasswordReset,
-  addVoyage, updateVoyage, deleteVoyage, getVoyages,
+  addVoyage, updateVoyage, deleteVoyage, getVoyages, getOdometres,
   addEntretien, updateEntretien, deleteEntretien, getEntretiens,
   addDepense, updateDepense, deleteDepense, getDepenses,
   uploadFile
@@ -39,6 +39,7 @@ const state = {
   voyages: [],
   entretien: [],
   depenses: [],
+  odometres: [],
   selectedChauffeurId: null,
   chauffeurFilter: "actif"
 };
@@ -66,6 +67,7 @@ function dashboardHtml() {
   const coutsEntretien = state.entretien.reduce((s, e) => s + numberOrZero(e.cout), 0);
   const autresDepenses = state.depenses.reduce((s, d) => s + numberOrZero(d.montant), 0);
   const benefice = revenu - coutsVoyages - coutsEntretien - autresDepenses;
+  const kmJour = state.odometres.length;
 
   return `
     <div class="stats-grid">
@@ -73,6 +75,7 @@ function dashboardHtml() {
       <div class="card stat-card"><div class="label">Chauffeurs actifs</div><div class="value">${state.chauffeurs.filter(c => (c.status || "actif") === "actif").length}</div></div>
       <div class="card stat-card"><div class="label">Revenu total</div><div class="value">${money(revenu)}</div></div>
       <div class="card stat-card"><div class="label">Bénéfice estimé</div><div class="value">${money(benefice)}</div></div>
+      <div class="card stat-card"><div class="label">Photos KM</div><div class="value">${kmJour}</div></div>
     </div>
 
     <div class="card">
@@ -142,6 +145,7 @@ function chauffeurDetailsHtml(chauffeur) {
   const uid = chauffeur.userId || "";
   const voyages = state.voyages.filter(v => v.chauffeurId === uid);
   const depenses = state.depenses.filter(d => d.chauffeurId === uid || d.chauffeurId === chauffeur.id);
+  const odometres = state.odometres.filter(o => o.chauffeurId === uid);
   const revenu = voyages.reduce((s, v) => s + numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour), 0);
   const gasoil = voyages.reduce((s, v) => s + numberOrZero(v.gasoil) + numberOrZero(v.gasoilRetour), 0);
   const fraisMission = voyages.reduce((s, v) => s + numberOrZero(v.fraisMission) + numberOrZero(v.fraisMissionRetour), 0);
@@ -164,6 +168,7 @@ function chauffeurDetailsHtml(chauffeur) {
         <div class="card stat-card"><div class="label">Revenu</div><div class="value">${money(revenu)}</div></div>
         <div class="card stat-card"><div class="label">Coûts</div><div class="value">${money(gasoil + fraisMission + autresDepenses)}</div></div>
         <div class="card stat-card"><div class="label">Net estimé</div><div class="value">${money(net)}</div></div>
+        <div class="card stat-card"><div class="label">Dernier KM</div><div class="value">${odometres[0]?.kilometrage || "-"}</div></div>
       </div>
 
       <div class="grid detail-grid">
@@ -271,6 +276,7 @@ function chauffeursHtml() {
           const uid = c.userId || c.uid || "";
           const voyages = state.voyages.filter(v => v.chauffeurId === uid);
           const revenu = voyages.reduce((sum, v) => sum + numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour), 0);
+          const lastKm = state.odometres.find(o => o.chauffeurId === uid);
           return `
           <div class="item-card driver-card ${isInactive ? "is-inactive" : ""}">
             <div class="driver-card-top">
@@ -285,6 +291,7 @@ function chauffeursHtml() {
               <p><strong>No chauffeur</strong><br>${escapeHtml(c.numeroChauffeur || "-")}</p>
               <p><strong>Permis</strong><br>${escapeHtml(c.numeroPermis || "-")}</p>
               <p><strong>Revenu</strong><br>${money(revenu)}</p>
+              <p><strong>Dernier KM</strong><br>${lastKm?.kilometrage || "-"}</p>
             </div>
             <p class="muted">Adresse : ${escapeHtml(c.adresse || "-")}</p>
             ${c.documentUrl ? `<p><a href="${c.documentUrl}" target="_blank" rel="noopener">Voir permis / document</a></p>` : ""}
@@ -476,8 +483,8 @@ function render() {
 }
 
 async function refreshData() {
-  [state.camions, state.chauffeurs, state.voyages, state.entretien, state.depenses] = await Promise.all([
-    getCamions(), getChauffeurs(), getVoyages(), getEntretiens(), getDepenses()
+  [state.camions, state.chauffeurs, state.voyages, state.entretien, state.depenses, state.odometres] = await Promise.all([
+    getCamions(), getChauffeurs(), getVoyages(), getEntretiens(), getDepenses(), getOdometres()
   ]);
   render();
 }

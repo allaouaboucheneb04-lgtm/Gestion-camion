@@ -59,6 +59,13 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /odometres/{id} {
+      allow read: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
+      allow create: if isAdmin() || (isDriver() && request.resource.data.chauffeurId == request.auth.uid);
+      allow update: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid && request.resource.data.chauffeurId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
     match /parametres/{id} {
       allow read: if signedIn();
       allow create, update, delete: if isAdmin();

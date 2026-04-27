@@ -17,3 +17,11 @@ Après upload sur GitHub Pages :
 
 Important : vérifie que ton admin existe dans Firestore :
 `users/{uid}` avec `role: "admin"`.
+
+
+## Nouveau: kilométrage quotidien avec photo
+Chaque chauffeur peut enregistrer chaque jour le kilométrage du camion avec une photo obligatoire de l’odomètre.
+Collection Firestore: `odometres`
+Storage: `odometres/{odometreId}/...`
+
+Après upload: publie `firestore.rules` et `storage.rules`, puis recharge avec `?v=km1`.

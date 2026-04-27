@@ -54,6 +54,18 @@ service firebase.storage {
          firestore.get(/databases/(default)/documents/voyages/$(voyageId)).data.chauffeurId == request.auth.uid);
     }
 
+    match /odometres/{odometreId}/{allPaths=**} {
+      allow read: if isAdmin() ||
+        (isDriver() &&
+         firestore.exists(/databases/(default)/documents/odometres/$(odometreId)) &&
+         firestore.get(/databases/(default)/documents/odometres/$(odometreId)).data.chauffeurId == request.auth.uid);
+
+      allow write: if isAdmin() ||
+        (isDriver() &&
+         firestore.exists(/databases/(default)/documents/odometres/$(odometreId)) &&
+         firestore.get(/databases/(default)/documents/odometres/$(odometreId)).data.chauffeurId == request.auth.uid);
+    }
+
     match /chauffeurs/{uid}/{allPaths=**} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow write: if isAdmin() || (signedIn() && request.auth.uid == uid);

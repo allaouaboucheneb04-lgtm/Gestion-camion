@@ -1,5 +1,5 @@
 import {
-  addVoyage, updateVoyage, deleteVoyage, getMesVoyages, uploadFile
+  addVoyage, updateVoyage, deleteVoyage, getMesVoyages, getCamions, addOdometre, updateOdometre, getMesOdometres, uploadFile
 } from "./firebase.js";
 import {
   money, formatDate, escapeHtml, formToObject, numberOrZero, dateTimeOrNull,
@@ -8,13 +8,16 @@ import {
 
 const state = {
   profile: null,
-  voyages: []
+  voyages: [],
+  camions: [],
+  odometres: []
 };
 
 function dashboardHtml() {
   const revenu = state.voyages.reduce((s, v) => s + numberOrZero(v.prixCourse) + numberOrZero(v.prixCourseRetour), 0);
   const couts = state.voyages.reduce((s, v) => s + numberOrZero(v.gasoil) + numberOrZero(v.fraisMission) + numberOrZero(v.gasoilRetour) + numberOrZero(v.fraisMissionRetour), 0);
   const benefice = revenu - couts;
+  const dernierKm = state.odometres.length ? state.odometres[0].kilometrage : 0;
 
   return `
     <div class="stats-grid">
@@ -22,6 +25,7 @@ function dashboardHtml() {
       <div class="card stat-card"><div class="label">Revenu</div><div class="value">${money(revenu)}</div></div>
       <div class="card stat-card"><div class="label">Coûts</div><div class="value">${money(couts)}</div></div>
       <div class="card stat-card"><div class="label">Bénéfice estimé</div><div class="value">${money(benefice)}</div></div>
+      <div class="card stat-card"><div class="label">Dernier KM</div><div class="value">${dernierKm || "-"}</div></div>
     </div>
   `;
 }
@@ -56,6 +60,38 @@ function formHtml() {
   `;
 }
 
+
+function odometerHtml() {
+  const today = new Date().toISOString().slice(0, 10);
+  const camionOptions = state.camions.map(c => `<option value="${c.id}">${escapeHtml(c.numeroCamion || "Camion")} - ${escapeHtml(c.numeroPlaque || "")}</option>`).join("");
+  return `
+    <div class="card odometer-card">
+      <div class="card-header"><div><h2>KM du jour / عداد اليوم</h2><p class="muted">Chaque jour, inscris le kilométrage du camion avec une photo de l’odomètre.</p></div></div>
+      <form id="odometerForm" class="form-grid">
+        <label><span>Date</span><input name="date" type="date" value="${today}" required></label>
+        <label><span>Camion</span><select name="camionId" required><option value="">Choisir camion</option>${camionOptions}</select></label>
+        <label><span>Kilométrage compteur</span><input name="kilometrage" type="number" step="1" min="0" required></label>
+        <label class="full"><span>Photo odomètre obligatoire</span><input type="file" name="odometrePhoto" accept="image/*" capture="environment" required></label>
+        <label class="full"><span>Remarque</span><textarea name="remarque" placeholder="Optionnel"></textarea></label>
+        <button class="btn primary full" type="submit">Enregistrer le KM du jour</button>
+      </form>
+      <div class="list odometer-list">
+        <h3>Mes derniers kilométrages</h3>
+        ${state.odometres.length ? state.odometres.slice(0, 10).map(o => {
+          const camion = state.camions.find(c => c.id === o.camionId);
+          return `
+          <div class="item-card odometer-item">
+            <h4>${escapeHtml(o.kilometrage || "-")} km <span class="badge">${formatDate(o.date)}</span></h4>
+            <p>Camion : ${escapeHtml(camion?.numeroCamion || o.camionId || "-")}</p>
+            ${o.remarque ? `<p>Remarque : ${escapeHtml(o.remarque)}</p>` : ""}
+            ${o.photoUrl ? `<p><a href="${o.photoUrl}" target="_blank" rel="noopener">Voir photo odomètre</a></p>` : ""}
+          </div>`;
+        }).join("") : `<div class="item-card"><p>Aucun kilométrage enregistré.</p></div>`}
+      </div>
+    </div>
+  `;
+}
+
 function tripsHtml() {
   return `
     <div class="card">
@@ -82,14 +118,14 @@ function tripsHtml() {
 
 function render() {
   document.getElementById("driverDashboard").innerHTML = dashboardHtml();
-  document.getElementById("driverFormView").innerHTML = formHtml();
+  document.getElementById("driverFormView").innerHTML = odometerHtml() + formHtml();
   document.getElementById("driverTripsView").innerHTML = tripsHtml();
   bindForm();
   bindActions();
 }
 
 async function refreshData() {
-  state.voyages = await getMesVoyages();
+  [state.voyages, state.camions, state.odometres] = await Promise.all([getMesVoyages(), getCamions(), getMesOdometres()]);
   render();
 }
 
@@ -127,6 +163,26 @@ function bindActions() {
 }
 
 function bindForm() {
+  document.getElementById("odometerForm")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const data = formToObject(form);
+    const file = form.odometrePhoto.files[0];
+    if (!file) return alert("Photo odomètre obligatoire.");
+    data.chauffeurId = state.profile.id;
+    data.nomChauffeur = state.profile.name || "";
+    data.kilometrage = numberOrZero(data.kilometrage);
+    data.date = data.date ? new Date(data.date + "T12:00:00") : new Date();
+    delete data.odometrePhoto;
+    const ref = await addOdometre(data);
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const url = await uploadFile(`odometres/${ref.id}/${Date.now()}-${safeName}`, file);
+    await updateOdometre(ref.id, { photoUrl: url });
+    form.reset();
+    alert("Kilométrage du jour enregistré ✅");
+    await refreshData();
+  });
+
   document.getElementById("driverTripForm")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.currentTarget;

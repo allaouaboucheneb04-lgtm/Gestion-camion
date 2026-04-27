@@ -187,6 +187,29 @@ export async function getMesVoyages() {
   return listWhere("voyages", "chauffeurId", "==", user.uid);
 }
 
+// Odomètre quotidien
+export async function addOdometre(data) {
+  const user = currentUser();
+  return addRecord("odometres", {
+    ...data,
+    chauffeurId: data.chauffeurId || user?.uid || "",
+    createdBy: user?.uid || ""
+  });
+}
+export async function updateOdometre(id, data) {
+  return updateRecord("odometres", id, data);
+}
+export async function deleteOdometre(id) {
+  return deleteRecord("odometres", id);
+}
+export async function getOdometres() {
+  return listRecords("odometres", "date");
+}
+export async function getMesOdometres() {
+  const user = currentUser();
+  return listWhere("odometres", "chauffeurId", "==", user.uid, "date");
+}
+
 export async function addEntretien(data) {
   return addRecord("entretien", data);
 }
