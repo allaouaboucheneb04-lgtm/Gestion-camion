@@ -508,3 +508,11 @@ html[dir="rtl"] .driver-sidebar{box-shadow:-8px 0 30px rgba(15,23,42,.12);}
 html[dir="rtl"] .driver-nav{text-align:right;}
 html[dir="rtl"] .driver-nav:hover,html[dir="rtl"] .driver-nav.active{transform:translateX(-2px);}
 @media(max-width:820px){.driver-layout{display:block}.driver-sidebar{position:relative;width:100%;height:auto;display:grid;grid-template-columns:1fr 1fr;gap:8px}.driver-brand{grid-column:1/-1}.danger-nav{margin-top:0}.driver-main{padding:14px}.page-title h1{font-size:23px}}
+
+/* Filtres Pro */
+.filter-panel{background:#f8fafc;border:1px solid #e5e7eb;border-radius:18px;padding:14px;margin:14px 0 16px}
+.filter-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.filter-grid label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:#475569}
+.filter-grid input,.filter-grid select{width:100%;padding:11px 12px;border:1px solid #dbe3ef;border-radius:12px;background:#fff;color:#0f172a}
+@media(max-width:900px){.filter-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.filter-grid{grid-template-columns:1fr}.filter-panel .actions{display:block}.filter-panel .btn{width:100%}}
