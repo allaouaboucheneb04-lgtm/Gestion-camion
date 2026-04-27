@@ -136,3 +136,14 @@ Chaque entretien peut maintenant avoir un statut :
 
 Dans Admin > Entretien, l’admin peut cliquer sur **En attente**, **En cours** ou **Réparé**.
 Quand l’entretien passe à **Réparé**, l’application enregistre `dateReparation`. Si le KM entretien est vide, elle utilise le dernier KM connu du camion pour recalculer les alertes.
+
+## Entretien intelligent pro
+
+- L’admin crée les modèles d’alertes dans `alertes_entretien`, exemple: Vidange / 10000 km.
+- Quand un entretien est enregistré avec statut `Réparé`, ou quand l’admin clique sur **Réparé**, l’application remet le compteur de cette alerte à zéro pour le camion sélectionné.
+- Le reset est stocké dans le document du camion:
+  - `dernierEntretien.<type>` = KM au moment de la réparation
+  - `dernierEntretienDates.<type>` = date de réparation
+- Le dashboard et la page Alertes entretien utilisent ce KM de départ pour recalculer les cercles.
+
+Exemple: camion à 150000 km, vidange faite, intervalle 10000 km. Le cercle repart à 0% et deviendra 50% à 155000 km.

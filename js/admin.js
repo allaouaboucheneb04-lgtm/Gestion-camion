@@ -82,8 +82,48 @@ function defaultEntretienInterval(type) {
   return 10000;
 }
 
+function entretienKey(type) {
+  return String(type || 'entretien')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'entretien';
+}
+
+function camionDernierEntretienKm(camionId, type) {
+  const camion = state.camions.find(c => c.id === camionId);
+  if (!camion) return 0;
+  const key = entretienKey(type);
+  const raw = camion.dernierEntretien?.[key] ?? camion.dernierEntretien?.[type];
+  return numberOrZero(raw);
+}
+
+function camionDernierEntretienDate(camionId, type) {
+  const camion = state.camions.find(c => c.id === camionId);
+  if (!camion) return null;
+  const key = entretienKey(type);
+  return camion.dernierEntretienDates?.[key] ?? camion.dernierEntretienDates?.[type] ?? null;
+}
+
+
 function latestEntretienFor(camionId, type) {
   const t = String(type || '').toLowerCase();
+  const kmFromCamion = camionDernierEntretienKm(camionId, type);
+  if (kmFromCamion > 0) {
+    return {
+      camionId,
+      type,
+      kmEntretien: kmFromCamion,
+      date: camionDernierEntretienDate(camionId, type),
+      source: 'camion_reset'
+    };
+  }
+
+  const repared = state.entretien
+    .filter(e => e.camionId === camionId && String(e.type || '').toLowerCase() === t && (e.status || '') === 'repare' && numberOrZero(e.kmEntretien) > 0)
+    .sort((a,b) => numberOrZero(b.kmEntretien) - numberOrZero(a.kmEntretien))[0];
+  if (repared) return repared;
+
   return state.entretien
     .filter(e => e.camionId === camionId && String(e.type || '').toLowerCase() === t && numberOrZero(e.kmEntretien) > 0)
     .sort((a,b) => numberOrZero(b.kmEntretien) - numberOrZero(a.kmEntretien))[0] || null;
@@ -505,7 +545,7 @@ function voyagesHtml() {
 function entretienHtml() {
   return `
     <div class="card">
-      <div class="card-header"><div><h2>Ajouter un entretien</h2><p class="muted">Pneus, vidange, pièces, réparation</p></div></div>
+      <div class="card-header"><div><h2>Ajouter un entretien</h2><p class="muted">Pneus, vidange, pièces, réparation. Quand tu mets Réparé, le compteur alerte du camion repart à zéro.</p></div></div>
       <form id="entretienForm" class="form-grid">
         <label><span>Camion</span><select name="camionId"><option value="">Choisir</option>${state.camions.map(c => `<option value="${c.id}">${escapeHtml(c.numeroCamion)}</option>`).join("")}</select></label>
         <label><span>Type</span><select name="type" required>
@@ -517,6 +557,7 @@ function entretienHtml() {
         </select></label>
         <label><span>Coût</span><input name="cout" type="number" step="0.01"></label>
         <label><span>Date</span><input name="date" type="datetime-local"></label>
+        <label><span>Statut</span><select name="status"><option value="repare">Réparé (reset alerte)</option><option value="en_cours">En cours</option><option value="en_attente">En attente</option></select></label>
         <label><span>Garage</span><input name="garage"></label>
         <label><span>KM lors entretien</span><input name="kmEntretien" type="number" placeholder="Ex: 125000"></label>
         <label><span>Intervalle prochain entretien (km)</span><input name="intervalKm" type="number" placeholder="Ex: 10000"></label>
@@ -534,7 +575,7 @@ function entretienHtml() {
           <div class="item-card">
             <h4>${escapeHtml(e.type || "-")} ${entretienStatusPill(e.status)}</h4>
             <p>Coût : ${money(e.cout)} | Date : ${formatDate(e.date)}</p>
-            ${e.dateReparation ? `<p>Réparé le : ${formatDate(e.dateReparation)}</p>` : ""}
+            ${e.dateReparation ? `<p>Réparé le : ${formatDate(e.dateReparation)} · Compteur alerte remis à zéro</p>` : ""}
             <p>Garage : ${escapeHtml(e.garage || "-")} | Remorque : ${e.remorque ? "Oui" : "Non"}</p>
             <p>Description : ${escapeHtml(e.description || "-")}</p>
             ${entretienProgressCircle(e, true)}
@@ -980,9 +1021,18 @@ function bindActions() {
     };
     if (status === "repare") {
       update.dateReparation = new Date();
-      if (!numberOrZero(item.kmEntretien) && item.camionId) {
+      if (item.camionId) {
         const currentKm = lastKmForCamion(item.camionId);
-        if (currentKm) update.kmEntretien = currentKm;
+        const resetKm = numberOrZero(item.kmEntretien) || currentKm;
+        if (resetKm) {
+          update.kmEntretien = resetKm;
+          const key = entretienKey(item.type);
+          await updateCamion(item.camionId, {
+            [`dernierEntretien.${key}`]: resetKm,
+            [`dernierEntretienDates.${key}`]: new Date(),
+            [`dernierEntretienTypes.${key}`]: item.type || key
+          });
+        }
       }
     }
     await updateEntretien(item.id, update);
@@ -1165,11 +1215,28 @@ function bindForms() {
     data.remorque = data.remorque === "true";
     const file = form.entretienFile.files[0];
     delete data.entretienFile;
+    data.status = data.status || 'repare';
     const ref = await addEntretien(data);
+    const patch = {};
     if (file) {
       const url = await uploadFile(`entretien/${ref.id}/${file.name}`, file);
-      await updateEntretien(ref.id, { documentUrl: url });
+      patch.documentUrl = url;
     }
+    if (data.status === 'repare' && data.camionId) {
+      const currentKm = lastKmForCamion(data.camionId);
+      const resetKm = numberOrZero(data.kmEntretien) || currentKm;
+      if (resetKm) {
+        patch.kmEntretien = resetKm;
+        patch.dateReparation = new Date();
+        const key = entretienKey(data.type);
+        await updateCamion(data.camionId, {
+          [`dernierEntretien.${key}`]: resetKm,
+          [`dernierEntretienDates.${key}`]: new Date(),
+          [`dernierEntretienTypes.${key}`]: data.type || key
+        });
+      }
+    }
+    if (Object.keys(patch).length) await updateEntretien(ref.id, patch);
     form.reset();
     await refreshData();
   });
