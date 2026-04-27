@@ -112,6 +112,12 @@ export async function inviteDriverAccount(data) {
   return result.data;
 }
 
+export async function deleteDriverAccount({ chauffeurDocId, uid }) {
+  const callDeleteDriver = httpsCallable(functions, "deleteDriver");
+  const result = await callDeleteDriver({ chauffeurDocId, uid });
+  return result.data;
+}
+
 export async function createDriverAuthAccount(email, password) {
   const secondaryApp = initializeApp(firebaseConfig, `driver-create-${Date.now()}`);
   const secondaryAuth = getAuth(secondaryApp);

@@ -127,3 +127,72 @@ exports.inviteDriver = onCall({ region: 'us-central1' }, async (request) => {
     throw new HttpsError('internal', friendlyError(error));
   }
 });
+
+exports.deleteDriver = onCall({ region: 'us-central1' }, async (request) => {
+  try {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Connexion requise.');
+    }
+
+    const adminDoc = await db.collection('users').doc(request.auth.uid).get();
+    if (!adminDoc.exists || adminDoc.data().role !== 'admin') {
+      throw new HttpsError('permission-denied', 'Seul un admin peut supprimer un chauffeur.');
+    }
+
+    const data = request.data || {};
+    const chauffeurDocId = cleanString(data.chauffeurDocId);
+    let uid = cleanString(data.uid);
+
+    if (!chauffeurDocId && !uid) {
+      throw new HttpsError('invalid-argument', 'UID ou document chauffeur obligatoire.');
+    }
+
+    let chauffeurRef = null;
+    let chauffeurSnap = null;
+
+    if (chauffeurDocId) {
+      chauffeurRef = db.collection('chauffeurs').doc(chauffeurDocId);
+      chauffeurSnap = await chauffeurRef.get();
+      if (!chauffeurSnap.exists) {
+        throw new HttpsError('not-found', 'Chauffeur introuvable.');
+      }
+      uid = uid || cleanString(chauffeurSnap.data().userId || chauffeurSnap.data().uid);
+    } else {
+      const qs = await db.collection('chauffeurs').where('userId', '==', uid).limit(1).get();
+      if (!qs.empty) {
+        chauffeurSnap = qs.docs[0];
+        chauffeurRef = chauffeurSnap.ref;
+      }
+    }
+
+    if (!uid) {
+      throw new HttpsError('invalid-argument', 'Ce chauffeur n’a pas de UID Auth. Supprime-le manuellement dans Firestore ou modifie sa fiche.');
+    }
+
+    if (uid === request.auth.uid) {
+      throw new HttpsError('failed-precondition', 'Tu ne peux pas supprimer ton propre compte admin.');
+    }
+
+    const targetUserDoc = await db.collection('users').doc(uid).get();
+    if (targetUserDoc.exists && targetUserDoc.data().role === 'admin') {
+      throw new HttpsError('failed-precondition', 'Impossible de supprimer un compte admin avec le bouton chauffeur.');
+    }
+
+    const batch = db.batch();
+    if (chauffeurRef) batch.delete(chauffeurRef);
+    batch.delete(db.collection('users').doc(uid));
+    await batch.commit();
+
+    try {
+      await admin.auth().deleteUser(uid);
+    } catch (error) {
+      if (error.code !== 'auth/user-not-found') throw error;
+    }
+
+    return { ok: true, uid, chauffeurDocId: chauffeurDocId || (chauffeurSnap ? chauffeurSnap.id : null) };
+  } catch (error) {
+    console.error('deleteDriver error:', error);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('internal', friendlyError(error));
+  }
+});

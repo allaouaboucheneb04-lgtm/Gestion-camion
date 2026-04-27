@@ -169,3 +169,23 @@ Vérifie :
 2. la function `inviteDriver` est bien déployée dans Firebase Functions ;
 3. Authentication > Email/Password est activé ;
 4. l’extension Trigger Email est configurée sur la collection `mail`.
+
+## Suppression complète chauffeur
+
+Le bouton **Supprimer** dans Admin > Chauffeurs appelle la Cloud Function `deleteDriver`.
+Elle supprime :
+
+- la fiche `chauffeurs/{docId}`
+- le document `users/{uid}`
+- le compte dans **Firebase Authentication**
+
+À déployer :
+
+```bash
+cd functions
+npm install
+cd ..
+firebase deploy --only functions
+```
+
+Sans déployer les Functions, Firebase Authentication ne peut pas être supprimé depuis une app HTML/JS statique.

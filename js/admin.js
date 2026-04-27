@@ -1,7 +1,7 @@
 import {
   addCamion, updateCamion, deleteCamion, getCamions,
   addChauffeur, updateChauffeur, deleteChauffeur, getChauffeurs,
-  inviteDriverAccount, createDriverAuthAccount, saveUserProfile,
+  inviteDriverAccount, deleteDriverAccount, createDriverAuthAccount, saveUserProfile,
   addVoyage, updateVoyage, deleteVoyage, getVoyages,
   addEntretien, updateEntretien, deleteEntretien, getEntretiens,
   addDepense, updateDepense, deleteDepense, getDepenses,
@@ -475,9 +475,21 @@ function bindActions() {
   }));
 
   document.querySelectorAll("[data-delete-chauffeur]").forEach(btn => btn.addEventListener("click", async () => {
-    if (!confirm("Supprimer ce chauffeur ?")) return;
-    await deleteChauffeur(btn.dataset.deleteChauffeur);
-    await refreshData();
+    const chauffeur = pickForEdit(state.chauffeurs, btn.dataset.deleteChauffeur);
+    const uid = chauffeur?.userId || chauffeur?.uid || "";
+    if (!confirm(`Supprimer complètement ce chauffeur ?\n\nCela supprime :\n- la fiche chauffeur\n- le document users/{uid}\n- le compte Firebase Authentication\n\nUID: `)) return;
+
+    try {
+      if (uid) {
+        await deleteDriverAccount({ chauffeurDocId: btn.dataset.deleteChauffeur, uid });
+      } else {
+        await deleteChauffeur(btn.dataset.deleteChauffeur);
+      }
+      alert("Chauffeur supprimé complètement ✅");
+      await refreshData();
+    } catch (error) {
+      displayError(error, "Suppression chauffeur complète");
+    }
   }));
   document.querySelectorAll("[data-edit-chauffeur]").forEach(btn => btn.addEventListener("click", async () => {
     const item = pickForEdit(state.chauffeurs, btn.dataset.editChauffeur);
