@@ -40,18 +40,24 @@ export function dateTimeOrNull(v) {
 }
 
 export async function requireRole(expectedRole, redirectPath = "../index.html") {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (!done) { done = true; reject(new Error("Connexion trop longue. Va à la page de connexion et reconnecte-toi.")); }
+    }, 12000);
     observeAuth(async user => {
-      if (!user) {
-        window.location.href = redirectPath;
-        return;
+      if (done) return;
+      try {
+        if (!user) {
+          clearTimeout(timer); done = true; window.location.href = redirectPath; return;
+        }
+        const profile = await getUserProfile(user.uid);
+        if (!profile) throw new Error(`Profil introuvable. Crée Firestore users/ avec role: admin.`);
+        if (expectedRole && profile.role !== expectedRole) throw new Error(`Rôle incorrect: . Rôle attendu: .`);
+        clearTimeout(timer); done = true; resolve({ user, profile });
+      } catch (e) {
+        clearTimeout(timer); done = true; reject(e);
       }
-      const profile = await getUserProfile(user.uid);
-      if (!profile || (expectedRole && profile.role !== expectedRole)) {
-        window.location.href = redirectPath;
-        return;
-      }
-      resolve({ user, profile });
     });
   });
 }
@@ -75,6 +81,6 @@ export function bindSidebar() {
 
 export function installSW() {
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => navigator.serviceWorker.register("../service-worker.js").catch(() => {}));
+    window.addEventListener("load", () => navigator.serviceWorker.register("../service-worker.js?v=final8").catch(() => {}));
   }
 }

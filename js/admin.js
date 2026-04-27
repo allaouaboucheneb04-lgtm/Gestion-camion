@@ -679,14 +679,33 @@ async function init() {
   bindLogout();
   bindSidebar();
   bindMenu();
+  const welcome = document.getElementById("welcomeText");
+  if (welcome) welcome.textContent = "Vérification de la connexion...";
   const { profile } = await requireRole("admin");
   state.profile = profile;
-  document.getElementById("welcomeText").textContent = `Bienvenue ${profile.name || "Admin"}`;
+  if (welcome) welcome.textContent = `Bienvenue ${profile.name || "Admin"}`;
   await refreshData();
   setActiveView("dashboard");
 }
 
 init().catch(err => {
   console.error(err);
-  alert(err.message || "Erreur de chargement admin");
+  const msg = err?.message || "Erreur de chargement admin";
+  const welcome = document.getElementById("welcomeText");
+  if (welcome) welcome.textContent = "Erreur de chargement";
+  const dash = document.getElementById("dashboardView");
+  if (dash) {
+    dash.innerHTML = `
+      <div class="card">
+        <h2>Erreur dashboard</h2>
+        <p class="helper error">${escapeHtml(msg)}</p>
+        <p class="muted">Crée/vérifie Firestore > users > TON_UID avec role: admin, puis reconnecte-toi.</p>
+        <button class="btn primary" id="goLoginBtn">Retour connexion</button>
+      </div>`;
+    document.getElementById("goLoginBtn")?.addEventListener("click", async () => {
+      try { await import("./firebase.js").then(m => m.logout()); } catch {}
+      window.location.href = "../index.html";
+    });
+  }
+  alert("Erreur dashboard: " + msg);
 });

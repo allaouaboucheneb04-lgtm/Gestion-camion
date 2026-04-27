@@ -258,3 +258,6 @@ avec:
 - Les rules bloquent la suppression directe de `users` et `chauffeurs` côté navigateur.
 - La suppression complète passe par `deleteDriver` avec Firebase Admin SDK.
 - Les anciennes fiches chauffeur avec `UID: -` seront supprimées seulement dans Firestore, car elles n'ont pas de compte Auth.
+
+## Correctif blocage dashboard
+Cette version met à jour le service worker, supprime les anciens caches et affiche une erreur claire si le rôle admin ou le profil Firestore manque.
