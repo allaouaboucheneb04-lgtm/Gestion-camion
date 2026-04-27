@@ -66,14 +66,14 @@ function odometerHtml() {
   const camionOptions = state.camions.map(c => `<option value="${c.id}">${escapeHtml(c.numeroCamion || "Camion")} - ${escapeHtml(c.numeroPlaque || "")}</option>`).join("");
   return `
     <div class="card odometer-card">
-      <div class="card-header"><div><h2>KM du jour / عداد اليوم</h2><p class="muted">Chaque jour, inscris le kilométrage du camion avec une photo de l’odomètre.</p></div></div>
+      <div class="card-header"><div><h2>KM du jour / عداد اليوم</h2><p class="muted">Chaque jour, inscris le kilométrage. La photo de l’odomètre est optionnelle : si tu l’ajoutes, elle sera envoyée par email.</p></div></div>
       <form id="odometerForm" class="form-grid">
-        <label><span>Date</span><input name="date" type="date" value="${today}" required></label>
-        <label><span>Camion</span><select name="camionId" required><option value="">Choisir camion</option>${camionOptions}</select></label>
-        <label><span>Kilométrage compteur</span><input name="kilometrage" type="number" step="1" min="0" required></label>
-        <label class="full"><span>Photo odomètre obligatoire</span><input type="file" name="odometrePhoto" accept="image/*" capture="environment" required></label>
-        <label class="full"><span>Remarque</span><textarea name="remarque" placeholder="Optionnel"></textarea></label>
-        <button class="btn primary full" type="submit">Enregistrer le KM du jour</button>
+        <label><span>Date / التاريخ</span><input name="date" type="date" value="${today}" required></label>
+        <label><span>Camion / الشاحنة</span><select name="camionId" required><option value="">Choisir camion</option>${camionOptions}</select></label>
+        <label><span>Kilométrage compteur / الكيلومترات</span><input name="kilometrage" type="number" step="1" min="0" required></label>
+        <label class="full"><span>Photo odomètre optionnelle / صورة العداد اختيارية</span><input type="file" name="odometrePhoto" accept="image/*" capture="environment"></label>
+        <label class="full"><span>Remarque / ملاحظة</span><textarea name="remarque" placeholder="Optionnel"></textarea></label>
+        <button class="btn primary full" type="submit">Enregistrer le KM / حفظ الكيلومترات</button>
       </form>
       <div class="list odometer-list">
         <h3>Mes derniers kilométrages</h3>
@@ -84,7 +84,7 @@ function odometerHtml() {
             <h4>${escapeHtml(o.kilometrage || "-")} km <span class="badge">${formatDate(o.date)}</span></h4>
             <p>Camion : ${escapeHtml(camion?.numeroCamion || o.camionId || "-")}</p>
             ${o.remarque ? `<p>Remarque : ${escapeHtml(o.remarque)}</p>` : ""}
-            ${o.photoUrl ? `<p><a href="${o.photoUrl}" target="_blank" rel="noopener">Voir photo odomètre</a></p>` : ""}
+            ${o.photoEmailSent ? `<p><span class="badge success">Photo envoyée par email</span></p>` : ""}
           </div>`;
         }).join("") : `<div class="item-card"><p>Aucun kilométrage enregistré.</p></div>`}
       </div>
@@ -162,24 +162,96 @@ function bindActions() {
   }));
 }
 
+function emailConfigReady() {
+  const cfg = window.EMAILJS_CONFIG || {};
+  return cfg.publicKey && cfg.serviceId && cfg.templateId &&
+    !String(cfg.publicKey).includes("REMPLACE") &&
+    !String(cfg.serviceId).includes("REMPLACE") &&
+    !String(cfg.templateId).includes("REMPLACE");
+}
+
+function readImageCompressed(file, maxSize = 900, quality = 0.68) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = Math.min(maxSize / img.width, maxSize / img.height, 1);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function sendOdometerEmail({ data, camion, imageDataUrl }) {
+  if (!window.emailjs) throw new Error("EmailJS n’est pas chargé.");
+  if (!emailConfigReady()) throw new Error("Configuration EmailJS manquante dans js/email-config.js");
+
+  const cfg = window.EMAILJS_CONFIG;
+  window.emailjs.init({ publicKey: cfg.publicKey });
+
+  const dateText = formatDate(data.date);
+  const params = {
+    to_email: cfg.toEmail || "",
+    subject: `KM camion - ${camion?.numeroCamion || data.camionId || "Camion"} - ${data.kilometrage} km`,
+    title_fr: "Preuve kilométrage camion",
+    title_ar: "إثبات كيلومترات الشاحنة",
+    chauffeur_name: state.profile.name || state.profile.email || "Chauffeur",
+    chauffeur_email: state.profile.email || "",
+    camion: `${camion?.numeroCamion || ""} ${camion?.numeroPlaque ? "- " + camion.numeroPlaque : ""}`.trim() || data.camionId || "-",
+    kilometrage: data.kilometrage,
+    date: dateText,
+    remarque: data.remarque || "-",
+    image: imageDataUrl
+  };
+
+  return window.emailjs.send(cfg.serviceId, cfg.templateId, params);
+}
+
 function bindForm() {
   document.getElementById("odometerForm")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.currentTarget;
     const data = formToObject(form);
     const file = form.odometrePhoto.files[0];
-    if (!file) return alert("Photo odomètre obligatoire.");
     data.chauffeurId = state.profile.id;
     data.nomChauffeur = state.profile.name || "";
     data.kilometrage = numberOrZero(data.kilometrage);
     data.date = data.date ? new Date(data.date + "T12:00:00") : new Date();
     delete data.odometrePhoto;
-    const ref = await addOdometre(data);
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
-    const url = await uploadFile(`odometres/${ref.id}/${Date.now()}-${safeName}`, file);
-    await updateOdometre(ref.id, { photoUrl: url });
+
+    let photoEmailSent = false;
+    let photoEmailError = "";
+
+    if (file) {
+      try {
+        const camion = state.camions.find(c => c.id === data.camionId);
+        const imageDataUrl = await readImageCompressed(file);
+        await sendOdometerEmail({ data, camion, imageDataUrl });
+        photoEmailSent = true;
+      } catch (err) {
+        console.error(err);
+        photoEmailError = err.message || "Erreur envoi email";
+      }
+    }
+
+    await addOdometre({
+      ...data,
+      photoEmailSent,
+      photoEmailError
+    });
+
     form.reset();
-    alert("Kilométrage du jour enregistré ✅");
+    alert(photoEmailSent ? "KM enregistré et photo envoyée par email ✅" : (file ? `KM enregistré, mais photo non envoyée: ${photoEmailError}` : "KM enregistré ✅"));
     await refreshData();
   });
 

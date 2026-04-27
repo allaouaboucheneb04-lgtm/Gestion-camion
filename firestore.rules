@@ -59,6 +59,7 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // KM journalier sans stockage photo. La photo optionnelle est envoyée par email.
     match /odometres/{id} {
       allow read: if isAdmin() || (isDriver() && resource.data.chauffeurId == request.auth.uid);
       allow create: if isAdmin() || (isDriver() && request.resource.data.chauffeurId == request.auth.uid);
