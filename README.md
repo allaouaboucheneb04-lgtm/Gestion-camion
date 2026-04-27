@@ -189,3 +189,24 @@ firebase deploy --only functions
 ```
 
 Sans déployer les Functions, Firebase Authentication ne peut pas être supprimé depuis une app HTML/JS statique.
+
+## Correctif suppression complète chauffeur
+
+Cette version corrige le bouton **Supprimer chauffeur** :
+
+- appelle la Cloud Function `deleteDriver` dans la région `us-central1`
+- supprime la fiche `chauffeurs/{docId}`
+- supprime `users/{uid}` si un UID existe
+- supprime le compte Firebase Authentication si un UID existe
+- si une ancienne fiche n’a pas de UID, seule la fiche chauffeur est supprimée proprement
+
+À déployer après remplacement des fichiers :
+
+```bash
+cd functions
+npm install
+cd ..
+firebase deploy --only functions
+```
+
+Puis republier `firestore.rules`.

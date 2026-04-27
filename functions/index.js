@@ -166,7 +166,12 @@ exports.deleteDriver = onCall({ region: 'us-central1' }, async (request) => {
     }
 
     if (!uid) {
-      throw new HttpsError('invalid-argument', 'Ce chauffeur n’a pas de UID Auth. Supprime-le manuellement dans Firestore ou modifie sa fiche.');
+      // Anciennes invitations/fiches sans compte Auth: on supprime seulement la fiche chauffeur.
+      if (chauffeurRef) {
+        await chauffeurRef.delete();
+        return { ok: true, uid: null, chauffeurDocId, authDeleted: false, note: 'Fiche chauffeur supprimée. Aucun compte Auth associé.' };
+      }
+      throw new HttpsError('invalid-argument', 'Ce chauffeur n’a pas de UID Auth et aucune fiche chauffeur n’a été trouvée.');
     }
 
     if (uid === request.auth.uid) {

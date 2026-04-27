@@ -17,15 +17,19 @@ function displayError(error, context = "Erreur") {
   console.error(context, error);
   const raw = error?.message || error?.code || String(error || "Erreur inconnue");
   let msg = raw;
-  if (raw.includes("internal")) {
-    msg = "Erreur interne Firebase Functions. Vérifie que la Cloud Function inviteDriver est déployée, que ton compte est admin, et que l’extension Trigger Email est configurée.";
-  }
-  if (raw.includes("not-found") || raw.includes("Function")) {
-    msg = "La Cloud Function inviteDriver n’est pas déployée. Déploie le dossier functions avec Firebase CLI.";
-  }
+
   if (raw.includes("permission-denied")) {
-    msg = "Permission refusée: ton document users/{uid} doit avoir role: admin.";
+    msg = "Permission refusée: vérifie que ton document users/{ton UID} contient exactement role: admin.";
+  } else if (raw.includes("functions/not-found") || raw.includes("not-found") || raw.includes("Function")) {
+    msg = "Cloud Function introuvable. Déploie les functions du ZIP avec: firebase deploy --only functions.";
+  } else if (context.includes("Suppression") && raw.includes("internal")) {
+    msg = "Erreur Cloud Function deleteDriver. Vérifie que deleteDriver est déployée dans le même projet Firebase et que tu es connecté en admin.";
+  } else if (context.includes("Création") && raw.includes("internal")) {
+    msg = "Erreur création chauffeur. Vérifie les rules Firestore, ton rôle admin, et teste sans fichier si besoin.";
+  } else if (raw.includes("auth/email-already-in-use")) {
+    msg = "Cet email existe déjà dans Firebase Authentication. Utilise un autre email ou supprime l’ancien compte Auth.";
   }
+
   alert(context + ": " + msg);
 }
 const state = {
@@ -477,14 +481,11 @@ function bindActions() {
   document.querySelectorAll("[data-delete-chauffeur]").forEach(btn => btn.addEventListener("click", async () => {
     const chauffeur = pickForEdit(state.chauffeurs, btn.dataset.deleteChauffeur);
     const uid = chauffeur?.userId || chauffeur?.uid || "";
-    if (!confirm(`Supprimer complètement ce chauffeur ?\n\nCela supprime :\n- la fiche chauffeur\n- le document users/{uid}\n- le compte Firebase Authentication\n\nUID: `)) return;
+    const uidText = uid || "aucun UID Auth — seule la fiche chauffeur sera supprimée";
+    if (!confirm(`Supprimer complètement ce chauffeur ?\n\nCela supprime :\n- la fiche chauffeur\n- le document users/{uid} si UID existe\n- le compte Firebase Authentication si UID existe\n\nUID: ${uidText}`)) return;
 
     try {
-      if (uid) {
-        await deleteDriverAccount({ chauffeurDocId: btn.dataset.deleteChauffeur, uid });
-      } else {
-        await deleteChauffeur(btn.dataset.deleteChauffeur);
-      }
+      await deleteDriverAccount({ chauffeurDocId: btn.dataset.deleteChauffeur, uid });
       alert("Chauffeur supprimé complètement ✅");
       await refreshData();
     } catch (error) {
