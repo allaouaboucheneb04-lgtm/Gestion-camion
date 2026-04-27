@@ -1,7 +1,7 @@
 import {
   addCamion, updateCamion, deleteCamion, getCamions,
   addChauffeur, updateChauffeur, deleteChauffeur, getChauffeurs,
-  createDriverInvitation,
+  inviteDriverAccount, createDriverAuthAccount, saveUserProfile,
   addVoyage, updateVoyage, deleteVoyage, getVoyages,
   addEntretien, updateEntretien, deleteEntretien, getEntretiens,
   addDepense, updateDepense, deleteDepense, getDepenses,
@@ -211,9 +211,10 @@ function chauffeurDetailsHtml(chauffeur) {
 function chauffeursHtml() {
   return `
     <div class="card">
-      <div class="card-header"><div><h2>Ajouter un chauffeur</h2><p class="muted">Méthode comme Garage: créer une invitation, puis envoyer le lien au chauffeur manuellement.</p></div></div>
+      <div class="card-header"><div><h2>Ajouter un chauffeur</h2><p class="muted">Créer le compte chauffeur avec un mot de passe temporaire</p></div></div>
       <form id="chauffeurForm" class="form-grid">
         <label><span>Email du chauffeur</span><input name="email" type="email" required></label>
+        <label><span>Mot de passe temporaire</span><input name="password" type="text" value="123456" required></label>
         <label><span>Nom du chauffeur</span><input name="nom" required></label>
         <label><span>Numéro de chauffeur</span><input name="numeroChauffeur"></label>
         <label><span>Numéro de permis</span><input name="numeroPermis"></label>
@@ -221,7 +222,7 @@ function chauffeursHtml() {
         <label><span>Kilométrage après chèque 10 voyages</span><input name="kilometrageApres10Voyages" type="number" step="0.01"></label>
         <label class="full"><span>Adresse</span><textarea name="adresse"></textarea></label>
         <label class="full"><span>Permis / document (optionnel)</span><input type="file" name="profilFile" accept="image/*,.pdf"></label>
-        <button class="btn primary full" type="submit">Créer invitation chauffeur</button>
+        <button class="btn primary full" type="submit">Créer chauffeur</button>
       </form>
     </div>
 
@@ -232,9 +233,8 @@ function chauffeursHtml() {
           <div class="item-card">
             <h4>${escapeHtml(c.nom || "-")}</h4>
             <p>UID : ${escapeHtml(c.userId || "-")}</p>
-            <p>Email invitation : ${escapeHtml(c.invitedEmail || c.invitationEmail || c.email || "-")}</p>
-            <p>Statut invitation : ${escapeHtml(c.statutInvitation || c.invitationStatus || "-")}</p>
-            ${c.inviteId && (c.invitationStatus || c.statutInvitation) !== "acceptée" ? `<p><strong>Lien invitation :</strong><br><input class="copy-input" readonly value="${location.origin}${location.pathname.replace('/pages/admin.html','')}/register.html?invite=${c.inviteId}"></p>` : ""}
+            <p>Email invitation : ${escapeHtml(c.invitedEmail || "-")}</p>
+            <p>Statut invitation : ${escapeHtml(c.statutInvitation || "-")}</p>
             <p>Numéro chauffeur : ${escapeHtml(c.numeroChauffeur || "-")}</p>
             <p>Permis : ${escapeHtml(c.numeroPermis || "-")}</p>
             <p>Adresse : ${escapeHtml(c.adresse || "-")}</p>
@@ -550,43 +550,60 @@ function bindForms() {
     const form = e.currentTarget;
     const submitBtn = form.querySelector('button[type="submit"]');
     const data = formToObject(form);
-    data.email = (data.email || "").trim().toLowerCase();
-    data.nom = (data.nom || "").trim();
-    data.kilometrageApres10Voyages = numberOrZero(data.kilometrageApres10Voyages);
+    const email = (data.email || "").trim().toLowerCase();
+    const password = (data.password || "123456").trim();
+    const nom = (data.nom || "").trim();
     const file = form.profilFile?.files?.[0];
-    delete data.profilFile;
 
-    if (!data.email) return alert("Email chauffeur obligatoire.");
-    if (!data.nom) return alert("Nom chauffeur obligatoire.");
+    if (!email) return alert("Email chauffeur obligatoire.");
+    if (!password || password.length < 6) return alert("Mot de passe obligatoire, minimum 6 caractères.");
+    if (!nom) return alert("Nom chauffeur obligatoire.");
 
     try {
       if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.textContent = "Création invitation...";
+        submitBtn.textContent = "Création du compte chauffeur...";
       }
 
-      const result = await createDriverInvitation(data);
+      const account = await createDriverAuthAccount(email, password);
+      const uid = account.uid;
 
-      if (!result?.inviteId || !result?.chauffeurDocId) {
-        throw new Error("Invitation non créée. Vérifie les rules Firestore pour invitations/chauffeurs.");
-      }
+      await saveUserProfile(uid, {
+        name: nom,
+        email,
+        role: "chauffeur",
+        phone: data.telephone || "",
+        address: data.adresse || "",
+        status: "actif"
+      });
+
+      const chauffeurRef = await addChauffeur({
+        userId: uid,
+        nom,
+        numeroChauffeur: data.numeroChauffeur || "",
+        numeroPermis: data.numeroPermis || "",
+        telephone: data.telephone || "",
+        adresse: data.adresse || "",
+        kilometrageApres10Voyages: numberOrZero(data.kilometrageApres10Voyages),
+        invitedEmail: email,
+        statutInvitation: "compte_cree"
+      });
 
       if (file) {
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
-        const url = await uploadFile(`chauffeurs/invitations/${result.chauffeurDocId}/${Date.now()}-${safeName}`, file);
-        await updateChauffeur(result.chauffeurDocId, { documentUrl: url });
+        const url = await uploadFile(`chauffeurs/${uid}/${Date.now()}-${safeName}`, file);
+        await updateChauffeur(chauffeurRef.id, { documentUrl: url });
       }
 
       form.reset();
       await refreshData();
-      const link = `${location.origin}${location.pathname.replace('/pages/admin.html','')}/register.html?invite=${result.inviteId}`;
-      prompt("Invitation créée ✅ Copie ce lien et envoie-le au chauffeur par SMS/WhatsApp/email:", link);
+      alert(`Chauffeur créé ✅\nEmail: ${email}\nMot de passe temporaire: ${password}`);
     } catch (error) {
       displayError(error, "Création chauffeur");
     } finally {
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.textContent = "Créer invitation chauffeur";
+        submitBtn.textContent = "Créer chauffeur";
       }
     }
   });
