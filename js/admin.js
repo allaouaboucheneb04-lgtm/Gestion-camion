@@ -732,6 +732,68 @@ function entretienHtml() {
       ${rows.length ? rows.map(e => `<div class="item-card"><h4>${escapeHtml(e.type || "-")} ${entretienStatusPill(e.status)}</h4><p>Camion : ${escapeHtml(camionName(e.camionId))}</p><p>Coût : ${money(e.cout)} | Date : ${formatDate(e.date)}</p>${e.dateReparation ? `<p>Réparé le : ${formatDate(e.dateReparation)} · Compteur alerte remis à zéro</p>` : ""}<p>Garage : ${escapeHtml(e.garage || "-")} | Remorque : ${e.remorque ? "Oui" : "Non"}</p><p>Description : ${escapeHtml(e.description || "-")}</p>${e.documentUrl ? `<p><a href="${e.documentUrl}" target="_blank" rel="noopener">Voir facture/document</a></p>` : ""}<div class="actions"><button class="btn secondary" data-status-entretien="${e.id}" data-status-value="en_attente">En attente</button><button class="btn secondary" data-status-entretien="${e.id}" data-status-value="en_cours">En cours</button><button class="btn success" data-status-entretien="${e.id}" data-status-value="repare">Réparé</button><button class="btn secondary" data-edit-entretien="${e.id}">Modifier</button><button class="btn danger" data-delete-entretien="${e.id}">Supprimer</button></div></div>`).join("") : `<div class="item-card"><p>Aucun entretien pour ces filtres.</p></div>`}
     </div></div>`;
 }
+function alertesEntretienHtml() {
+  const items = entretienAlerts();
+  const danger = items.filter(x => x.progress.status === 'danger').length;
+  const warning = items.filter(x => x.progress.status === 'warning').length;
+  const models = state.alertesEntretien;
+  return `
+    <div class="card maintenance-hero">
+      <div><p class="eyebrow">Alertes entretien</p><h2>Alertes à suivre par kilométrage</h2><p class="muted">L’admin crée les entretiens à suivre une seule fois. Exemple: Vidange chaque 10 000 km. L’app calcule ensuite la progression pour chaque camion.</p></div>
+      <div class="driver-mini-stats"><div><strong>${models.length}</strong><span>Alertes créées</span></div><div><strong>${warning}</strong><span>À surveiller</span></div><div><strong>${danger}</strong><span>Urgents</span></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div><h2>Créer une alerte à suivre</h2><p class="muted">Exemples: Vidange 10 000 km, pneus 50 000 km, contrôle frein 20 000 km.</p></div></div>
+      <form id="alerteEntretienForm" class="form-grid">
+        <label><span>Nom / type entretien</span><input name="type" required placeholder="Ex: Vidange"></label>
+        <label><span>KM à attendre</span><input name="intervalKm" type="number" required placeholder="Ex: 10000"></label>
+        <label><span>Alerte orange à (%)</span><input name="warningPercent" type="number" value="80" placeholder="80"></label>
+        <label><span>Statut</span><select name="status"><option value="actif">Actif</option><option value="inactif">Inactif</option></select></label>
+        <label class="full"><span>Note</span><textarea name="description" placeholder="Ex: changer filtre à huile avec vidange"></textarea></label>
+        <button class="btn primary full" type="submit">Ajouter l’alerte</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div><h2>Alertes configurées</h2><p class="muted">Ces règles s’appliquent automatiquement à tous les camions.</p></div></div>
+      <div class="list">
+        ${models.length ? models.map(a => `
+          <div class="item-card">
+            <h4>${escapeHtml(a.type || '-')} · ${numberOrZero(a.intervalKm).toLocaleString('fr-CA')} km</h4>
+            <p>Statut : <strong>${escapeHtml(a.status || 'actif')}</strong> · Orange à ${numberOrZero(a.warningPercent || 80)}%</p>
+            <p class="muted">${escapeHtml(a.description || '')}</p>
+            <div class="actions">
+              <button class="btn secondary" data-edit-alerte-entretien="${a.id}">Modifier</button>
+              <button class="btn danger" data-delete-alerte-entretien="${a.id}">Supprimer</button>
+            </div>
+          </div>
+        `).join('') : `<div class="item-card"><p>Aucune alerte créée. Ajoute par exemple Vidange / 10000 km.</p></div>`}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div><h2>Suivi par camion</h2><p class="muted">Vert = OK, orange = bientôt, rouge = entretien dépassé.</p></div></div>
+      <div class="maintenance-list">
+        ${items.length ? items.map(e => `
+          <div class="maintenance-alert-card ${e.progress.status}">
+            <div class="maintenance-alert-main">
+              <div><h3>${escapeHtml(camionName(e.camionId))}</h3><p>${escapeHtml(e.type || 'Entretien')}</p><p class="muted">Dernier entretien: ${e.lastEntretienDate ? formatDate(e.lastEntretienDate) : 'non renseigné'} · Départ: ${e.progress.startKm.toLocaleString('fr-CA')} km</p></div>
+              ${entretienProgressCircle(e)}
+            </div>
+            <div class="maintenance-details">
+              <span>Intervalle: ${e.progress.intervalKm.toLocaleString('fr-CA')} km</span>
+              <span>KM utilisés: ${e.progress.usedKm.toLocaleString('fr-CA')} km</span>
+              <span>Restant: ${e.progress.remainingKm.toLocaleString('fr-CA')} km</span>
+            </div>
+            ${e.progress.status === 'danger' ? '<div class="alert-text danger">Entretien dépassé: planifie une intervention.</div>' : e.progress.status === 'warning' ? '<div class="alert-text warning">Attention: entretien bientôt nécessaire.</div>' : '<div class="alert-text ok">Situation normale.</div>'}
+          </div>
+        `).join('') : `<div class="item-card"><p>Ajoute au moins un camion et une alerte à suivre pour voir les cercles.</p></div>`}
+      </div>
+    </div>
+  `;
+}
+
 function depensesHtml() {
   ensureFilters();
   const f = state.filters.depenses;

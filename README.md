@@ -174,3 +174,7 @@ Ajouté/corrigé dans cette version:
 
 Après upload sur GitHub, recharge avec:
 `?v=filtres-pro1`
+
+## Correctif dashboard
+- Correction de l’erreur `alertesEntretienHtml` manquante.
+- Recharge avec `?v=fix-alertes1`.
