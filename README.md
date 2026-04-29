@@ -160,3 +160,21 @@ Exemple: camion à 150000 km, vidange faite, intervalle 10000 km. Le cercle repa
 - Alertes configurables : collection `alertes_entretien`.
 
 Recharge le site avec `?v=entreprise-finale1`.
+
+## Mise à jour filtres PRO
+Version: `filtres-pro1`
+
+Ajouté/corrigé dans cette version:
+- Filtres admin dans Voyages: recherche, période, chauffeur, camion, type de voyage.
+- Filtres admin dans Dépenses: recherche, période, camion, chauffeur, type.
+- Filtres admin dans Entretien: recherche, période, camion, type, statut.
+- Filtres admin dans Stats KM: période, camion, chauffeur.
+- Nouvelle page Admin: Profit & Performance avec filtres période/camion/chauffeur.
+- Profit par camion, profit par chauffeur, meilleur chauffeur.
+
+Après upload sur GitHub, recharge avec:
+`?v=filtres-pro1`
+
+## Correctif dashboard
+- Correction de l’erreur `alertesEntretienHtml` manquante.
+- Recharge avec `?v=fix-alertes1`.
