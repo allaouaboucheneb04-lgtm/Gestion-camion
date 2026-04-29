@@ -185,3 +185,10 @@ Après upload sur GitHub, recharge avec:
 - 1 carte par camion.
 - Filtres camion/type/statut/recherche.
 - Recharge: ?v=cercle-ultra-pro1
+
+
+## Fix final cercles entretien
+- Ancien script entretien supprimé des HTML.
+- Nouveau script: js/entretien-cercles-fix-final.js
+- Force un seul rendu en cercles.
+- Cache: recharge avec ?v=cercle-fix-final1
