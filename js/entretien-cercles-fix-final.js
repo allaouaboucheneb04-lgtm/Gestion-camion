@@ -203,3 +203,24 @@ async function loadEntretienCerclesUltraPro(){
 document.addEventListener("DOMContentLoaded", function(){
   setTimeout(loadEntretienCerclesUltraPro, 900);
 });
+
+
+document.addEventListener("DOMContentLoaded", function(){
+  var ids = [
+    "dashboardEntretien",
+    "alertesEntretienHtml",
+    "alertesEntretienCompact"
+  ];
+  ids.forEach(function(id){
+    var el = document.getElementById(id);
+    if(el){
+      el.innerHTML = "";
+      el.style.display = "none";
+    }
+  });
+
+  var target = document.getElementById("entretienUltraDashboard");
+  if(target){
+    target.innerHTML = "";
+  }
+});

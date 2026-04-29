@@ -192,3 +192,10 @@ Après upload sur GitHub, recharge avec:
 - Nouveau script: js/entretien-cercles-fix-final.js
 - Force un seul rendu en cercles.
 - Cache: recharge avec ?v=cercle-fix-final1
+
+
+FINAL CLEAN FIX
+- Old entretien dashboards removed
+- Only cercle dashboard kept
+- Loading block removed
+- Cache version: finalcircle22
