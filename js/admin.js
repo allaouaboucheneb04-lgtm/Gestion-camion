@@ -209,48 +209,19 @@ function entretienAlerts() {
     .sort((a,b) => b.progress.percent - a.progress.percent);
 }
 
-
-function entretienGroupedByCamionHtml(items) {
-  const byCamion = {};
-  items.forEach(e => {
-    if (!byCamion[e.camionId]) byCamion[e.camionId] = [];
-    byCamion[e.camionId].push(e);
-  });
-  const groups = Object.keys(byCamion).map(camionId => {
-    const rows = byCamion[camionId].sort((a,b)=>b.progress.percent-a.progress.percent);
-    const maxStatus = rows.some(x=>x.progress.status==='danger') ? 'danger' : rows.some(x=>x.progress.status==='warning') ? 'warning' : 'ok';
-    return { camionId, rows, maxStatus, maxPercent: Math.max(...rows.map(x=>x.progress.percent)) };
-  }).sort((a,b)=>b.maxPercent-a.maxPercent);
-  if (!groups.length) return `<div class="item-card"><p>Ajoute au moins un camion et une alerte à suivre.</p></div>`;
-  return groups.map(g => `
-    <div class="maintenance-truck-card ${g.maxStatus}">
-      <div class="maintenance-truck-head">
-        <div><h3>🚛 ${escapeHtml(camionName(g.camionId))}</h3><p class="muted">${g.rows.length} entretien(s) suivi(s)</p></div>
-        <span class="status-pill repair ${g.maxStatus==='danger'?'en_attente':g.maxStatus==='warning'?'en_cours':'repare'}">${g.maxStatus==='danger'?'Urgent':g.maxStatus==='warning'?'Bientôt':'OK'}</span>
-      </div>
-      <div class="maintenance-compact-list">
-        ${g.rows.map(e => {
-          const p = e.progress;
-          return `<div class="maintenance-compact-row ${p.status}">
-            <div class="maintenance-row-top"><strong>${escapeHtml(e.type || 'Entretien')}</strong><span>${p.percent}%</span></div>
-            <div class="maintenance-bar"><div class="maintenance-bar-fill ${p.status}" style="width:${p.percent}%"></div></div>
-            <div class="maintenance-row-meta"><span>${p.remainingKm.toLocaleString('fr-CA')} km restants</span><span>Actuel: ${p.currentKm.toLocaleString('fr-CA')} km</span><span>Départ: ${p.startKm.toLocaleString('fr-CA')} km</span></div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>
-  `).join('');
-}
-
 function dashboardEntretienHtml() {
-  const items = entretienAlerts();
-  const danger = items.filter(x => x.progress.status === 'danger').length;
-  const warning = items.filter(x => x.progress.status === 'warning').length;
+  const items = entretienAlerts().slice(0, 6);
   return `
     <div class="card maintenance-dashboard-card">
-      <div class="card-header"><div><h2>Suivi entretien</h2><p class="muted">Vue compacte: 1 carte par camion.</p></div><button class="btn secondary" data-go-alertes>Voir alertes</button></div>
-      <div class="driver-mini-stats"><div><strong>${items.length}</strong><span>Suivis</span></div><div><strong>${warning}</strong><span>Bientôt</span></div><div><strong>${danger}</strong><span>Urgents</span></div></div>
-      <div class="maintenance-truck-grid">${entretienGroupedByCamionHtml(items)}</div>
+      <div class="card-header"><div><h2>Suivi entretien</h2><p class="muted">Progression kilométrage par camion et type d'entretien.</p></div><button class="btn secondary" data-go-alertes>Voir alertes</button></div>
+      <div class="maintenance-grid">
+        ${items.length ? items.map(e => `
+          <div class="maintenance-mini-card">
+            <div><h4>${escapeHtml(camionName(e.camionId))}</h4><p>${escapeHtml(e.type || 'Entretien')}</p></div>
+            ${entretienProgressCircle(e, true)}
+          </div>
+        `).join('') : `<div class="item-card"><p>Aucun entretien avec kilométrage. Ajoute un entretien avec KM entretien et intervalle KM.</p></div>`}
+      </div>
     </div>
   `;
 }
@@ -506,210 +477,9 @@ function chauffeursHtml() {
   `;
 }
 
-
-function ensureFilters() {
-  if (!state.filters) state.filters = {};
-  const defaults = {
-    voyages: { q: "", chauffeurId: "", camionId: "", typeVoyage: "", period: "month" },
-    depenses: { q: "", chauffeurId: "", camionId: "", type: "", period: "month" },
-    entretien: { q: "", camionId: "", type: "", status: "", period: "all" },
-    statskm: { chauffeurId: "", camionId: "", period: "month" },
-    profit: { chauffeurId: "", camionId: "", period: "month" }
-  };
-  for (const [k, v] of Object.entries(defaults)) state.filters[k] = { ...v, ...(state.filters[k] || {}) };
-  return state.filters;
-}
-
-function normalizeFilterText(v) {
-  return String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
-
-function docDateValue(item) {
-  return dateMillis(item.dateDepart || item.date || item.createdAt || item.updatedAt || item.dateRetour || item.dateArrivee);
-}
-
-function periodStart(period) {
-  const now = new Date();
-  if (period === "today") return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  if (period === "week") {
-    const diff = (now.getDay() + 6) % 7;
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff).getTime();
-  }
-  if (period === "month") return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-  if (period === "year") return new Date(now.getFullYear(), 0, 1).getTime();
-  return 0;
-}
-
-function inPeriod(item, period) {
-  if (!period || period === "all") return true;
-  const d = docDateValue(item);
-  if (!d) return true;
-  return d >= periodStart(period);
-}
-
-function optionCamions(selected = "") {
-  return state.camions.map(c => `<option value="${c.id}" ${selected === c.id ? "selected" : ""}>${escapeHtml(c.numeroCamion || "Camion")} ${c.numeroPlaque ? "- " + escapeHtml(c.numeroPlaque) : ""}</option>`).join("");
-}
-
-function optionChauffeurs(selected = "") {
-  return state.chauffeurs.filter(c => c.userId).map(c => `<option value="${c.userId}" ${selected === c.userId ? "selected" : ""}>${escapeHtml(c.nom || c.email || c.userId)}</option>`).join("");
-}
-
-function periodOptions(selected = "month") {
-  return `<option value="today" ${selected === "today" ? "selected" : ""}>Aujourd’hui</option><option value="week" ${selected === "week" ? "selected" : ""}>Cette semaine</option><option value="month" ${selected === "month" ? "selected" : ""}>Ce mois</option><option value="year" ${selected === "year" ? "selected" : ""}>Cette année</option><option value="all" ${selected === "all" ? "selected" : ""}>Tout</option>`;
-}
-
-function adminFilterBar(scope, fieldsHtml) {
-  return `<div class="filter-panel" data-filter-panel="${scope}"><div class="filter-grid">${fieldsHtml}</div><div class="actions"><button class="btn secondary" type="button" data-reset-filter="${scope}">Réinitialiser filtres</button></div></div>`;
-}
-
-function filteredVoyages() {
-  const f = ensureFilters().voyages;
-  const q = normalizeFilterText(f.q);
-  return state.voyages.filter(v => {
-    if (f.chauffeurId && v.chauffeurId !== f.chauffeurId) return false;
-    if (f.camionId && v.camionId !== f.camionId) return false;
-    if (f.typeVoyage && (v.typeVoyage || "simple") !== f.typeVoyage) return false;
-    if (!inPeriod(v, f.period)) return false;
-    if (q) {
-      const text = normalizeFilterText([v.client, v.depart, v.destination, v.retourClient, v.retourDepart, v.retourDestination, v.nomChauffeur, chauffeurName(v.chauffeurId), camionName(v.camionId)].join(" "));
-      if (!text.includes(q)) return false;
-    }
-    return true;
-  });
-}
-
-function filteredDepenses() {
-  const f = ensureFilters().depenses;
-  const q = normalizeFilterText(f.q);
-  return state.depenses.filter(d => {
-    if (f.chauffeurId && d.chauffeurId !== f.chauffeurId) return false;
-    if (f.camionId && d.camionId !== f.camionId) return false;
-    if (f.type && String(d.type || "") !== f.type) return false;
-    if (!inPeriod(d, f.period)) return false;
-    if (q) {
-      const text = normalizeFilterText([d.type, d.description, chauffeurName(d.chauffeurId), camionName(d.camionId)].join(" "));
-      if (!text.includes(q)) return false;
-    }
-    return true;
-  });
-}
-
-function filteredEntretien() {
-  const f = ensureFilters().entretien;
-  const q = normalizeFilterText(f.q);
-  return state.entretien.filter(e => {
-    if (f.camionId && e.camionId !== f.camionId) return false;
-    if (f.type && String(e.type || "") !== f.type) return false;
-    if (f.status && String(e.status || "repare") !== f.status) return false;
-    if (!inPeriod(e, f.period)) return false;
-    if (q) {
-      const text = normalizeFilterText([e.type, e.description, e.garage, camionName(e.camionId)].join(" "));
-      if (!text.includes(q)) return false;
-    }
-    return true;
-  });
-}
-
-function filteredOdometres(scope = "statskm") {
-  const f = ensureFilters()[scope] || ensureFilters().statskm;
-  return state.odometres.filter(o => {
-    if (f.chauffeurId && o.chauffeurId !== f.chauffeurId) return false;
-    if (f.camionId && o.camionId !== f.camionId) return false;
-    if (!inPeriod(o, f.period)) return false;
-    return true;
-  });
-}
-
-function bindAdminFilters() {
-  document.querySelectorAll("[data-admin-filter]").forEach(el => {
-    el.addEventListener("change", () => {
-      const scope = el.dataset.scope;
-      const field = el.dataset.adminFilter;
-      ensureFilters()[scope][field] = el.value;
-      render();
-      setActiveView(scope === "profit" ? "profit" : scope);
-    });
-    if (el.tagName === "INPUT") {
-      el.addEventListener("input", () => {
-        const scope = el.dataset.scope;
-        const field = el.dataset.adminFilter;
-        ensureFilters()[scope][field] = el.value;
-      });
-      el.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter") {
-          ev.preventDefault();
-          render();
-          setActiveView(el.dataset.scope);
-        }
-      });
-    }
-  });
-  document.querySelectorAll("[data-reset-filter]").forEach(btn => btn.addEventListener("click", () => {
-    const scope = btn.dataset.resetFilter;
-    if (state.filters) delete state.filters[scope];
-    ensureFilters();
-    render();
-    setActiveView(scope === "profit" ? "profit" : scope);
-  }));
-}
-
-function profitPerformanceHtml() {
-  const f = ensureFilters().profit;
-  const voyages = filteredVoyagesForProfit();
-  const depenses = filteredDepensesForProfit();
-  const byCamion = new Map();
-  const byChauffeur = new Map();
-  let revenus = 0, couts = 0;
-  function addMap(map, key, rev, cost, km) {
-    if (!map.has(key)) map.set(key, { revenus:0, couts:0, profit:0, km:0, voyages:0 });
-    const x = map.get(key);
-    x.revenus += rev; x.couts += cost; x.profit += rev - cost; x.km += km; x.voyages += 1;
-  }
-  voyages.forEach(v => {
-    const rev = voyageRevenue(v), cost = voyageCosts(v), km = voyageDistance(v);
-    revenus += rev; couts += cost;
-    addMap(byCamion, v.camionId || "-", rev, cost, km);
-    addMap(byChauffeur, v.chauffeurId || "-", rev, cost, km);
-  });
-  depenses.forEach(d => {
-    const amount = numberOrZero(d.montant || d.cout);
-    couts += amount;
-    if (d.camionId) { if (!byCamion.has(d.camionId)) byCamion.set(d.camionId, { revenus:0, couts:0, profit:0, km:0, voyages:0 }); const x=byCamion.get(d.camionId); x.couts+=amount; x.profit-=amount; }
-    if (d.chauffeurId) { if (!byChauffeur.has(d.chauffeurId)) byChauffeur.set(d.chauffeurId, { revenus:0, couts:0, profit:0, km:0, voyages:0 }); const x=byChauffeur.get(d.chauffeurId); x.couts+=amount; x.profit-=amount; }
-  });
-  const best = [...byChauffeur.entries()].sort((a,b)=>b[1].profit-a[1].profit)[0];
-  const truckRows = [...byCamion.entries()].sort((a,b)=>b[1].profit-a[1].profit).map(([id,x]) => `<div class="item-card km-row"><div><h4>${escapeHtml(camionName(id))}</h4><p>Voyages : ${x.voyages} · KM : ${Math.round(x.km).toLocaleString("fr-CA")}</p><p>Revenus : ${money(x.revenus)} · Coûts : ${money(x.couts)}</p></div><div class="driver-score"><strong>${money(x.profit)}</strong><span>${x.km ? ratio(x.profit / x.km, " DA/km") : "profit"}</span></div></div>`).join("");
-  const driverRows = [...byChauffeur.entries()].sort((a,b)=>b[1].profit-a[1].profit).map(([id,x],i) => `<div class="item-card km-row"><div><h4>${i===0?"🏆 ":""}${escapeHtml(chauffeurName(id))}</h4><p>Voyages : ${x.voyages} · KM : ${Math.round(x.km).toLocaleString("fr-CA")}</p><p>Revenus : ${money(x.revenus)} · Coûts : ${money(x.couts)}</p></div><div class="driver-score"><strong>${money(x.profit)}</strong><span>profit</span></div></div>`).join("");
-  const filters = adminFilterBar("profit", `
-    <label><span>Période</span><select data-scope="profit" data-admin-filter="period">${periodOptions(f.period)}</select></label>
-    <label><span>Camion</span><select data-scope="profit" data-admin-filter="camionId"><option value="">Tous</option>${optionCamions(f.camionId)}</select></label>
-    <label><span>Chauffeur</span><select data-scope="profit" data-admin-filter="chauffeurId"><option value="">Tous</option>${optionChauffeurs(f.chauffeurId)}</select></label>
-  `);
-  return `<div class="km-hero card"><div><p class="eyebrow">Profit & Performance</p><h2>Rentabilité camion et chauffeur</h2><p class="muted">Filtres par période, camion et chauffeur.</p></div></div>${filters}<div class="stats-grid"><div class="card stat-card"><div class="label">Revenus</div><div class="value">${money(revenus)}</div></div><div class="card stat-card"><div class="label">Coûts</div><div class="value">${money(couts)}</div></div><div class="card stat-card"><div class="label">Profit net</div><div class="value">${money(revenus-couts)}</div></div><div class="card stat-card"><div class="label">Meilleur chauffeur</div><div class="value">${best ? escapeHtml(chauffeurName(best[0])) : "-"}</div><p>${best ? money(best[1].profit) : ""}</p></div></div><div class="card"><div class="card-header"><div><h2>Profit par camion</h2></div></div><div class="list">${truckRows || `<div class="item-card"><p>Aucune donnée.</p></div>`}</div></div><div class="card"><div class="card-header"><div><h2>Profit par chauffeur</h2></div></div><div class="list">${driverRows || `<div class="item-card"><p>Aucune donnée.</p></div>`}</div></div>`;
-}
-
-function filteredVoyagesForProfit() {
-  const f = ensureFilters().profit;
-  return state.voyages.filter(v => (!f.chauffeurId || v.chauffeurId === f.chauffeurId) && (!f.camionId || v.camionId === f.camionId) && inPeriod(v, f.period));
-}
-function filteredDepensesForProfit() {
-  const f = ensureFilters().profit;
-  return state.depenses.filter(d => (!f.chauffeurId || d.chauffeurId === f.chauffeurId) && (!f.camionId || d.camionId === f.camionId) && inPeriod(d, f.period));
-}
 function voyagesHtml() {
-  ensureFilters();
-  const f = state.filters.voyages;
-  const voyages = filteredVoyages();
   const chauffeurOptions = state.chauffeurs.filter(c => (c.status || "actif") === "actif" && c.userId).map(c => `<option value="${c.userId}">${escapeHtml(c.nom)} (${escapeHtml(c.userId)})</option>`).join("");
   const camionOptions = state.camions.map(c => `<option value="${c.id}">${escapeHtml(c.numeroCamion)} - ${escapeHtml(c.marqueModele)}</option>`).join("");
-  const filters = adminFilterBar("voyages", `
-    <label><span>Recherche</span><input data-scope="voyages" data-admin-filter="q" value="${escapeHtml(f.q)}" placeholder="Client, départ, destination..."></label>
-    <label><span>Période</span><select data-scope="voyages" data-admin-filter="period">${periodOptions(f.period)}</select></label>
-    <label><span>Chauffeur</span><select data-scope="voyages" data-admin-filter="chauffeurId"><option value="">Tous</option>${optionChauffeurs(f.chauffeurId)}</select></label>
-    <label><span>Camion</span><select data-scope="voyages" data-admin-filter="camionId"><option value="">Tous</option>${optionCamions(f.camionId)}</select></label>
-    <label><span>Type</span><select data-scope="voyages" data-admin-filter="typeVoyage"><option value="">Tous</option><option value="simple" ${f.typeVoyage === "simple" ? "selected" : ""}>Aller simple</option><option value="aller_retour" ${f.typeVoyage === "aller_retour" ? "selected" : ""}>Aller-retour</option></select></label>
-  `);
   return `
     <div class="card">
       <div class="card-header"><div><h2>Ajouter un voyage</h2><p class="muted">Aller + retour + coûts</p></div></div>
@@ -727,40 +497,104 @@ function voyagesHtml() {
         <label><span>Gasoil aller</span><input name="gasoil" type="number" step="0.01"></label>
         <label><span>Frais de mission aller</span><input name="fraisMission" type="number" step="0.01"></label>
         <label><span>Auteur dépenses</span><input name="auteurDepenses"></label>
-        <div class="return-section full" data-return-section style="display:none;"><div class="section-title">Retour indépendant</div><div class="form-grid nested-grid">
-          <label><span>Client retour</span><input name="retourClient"></label><label><span>Départ retour</span><input name="retourDepart"></label><label><span>Destination retour</span><input name="retourDestination"></label><label><span>Date de retour</span><input name="dateRetour" type="datetime-local"></label><label><span>Date arrivée retour</span><input name="dateRetourArrivee" type="datetime-local"></label><label><span>Prix course retour</span><input name="prixCourseRetour" type="number" step="0.01"></label><label><span>Frais mission retour</span><input name="fraisMissionRetour" type="number" step="0.01"></label><label><span>Gasoil retour</span><input name="gasoilRetour" type="number" step="0.01"></label>
-        </div></div>
+
+        <div class="return-section full" data-return-section style="display:none;">
+          <div class="section-title">Retour indépendant</div>
+          <div class="form-grid nested-grid">
+            <label><span>Client retour</span><input name="retourClient"></label>
+            <label><span>Départ retour</span><input name="retourDepart"></label>
+            <label><span>Destination retour</span><input name="retourDestination"></label>
+            <label><span>Date de retour</span><input name="dateRetour" type="datetime-local"></label>
+            <label><span>Date arrivée retour</span><input name="dateRetourArrivee" type="datetime-local"></label>
+            <label><span>Prix course retour</span><input name="prixCourseRetour" type="number" step="0.01"></label>
+            <label><span>Frais mission retour</span><input name="fraisMissionRetour" type="number" step="0.01"></label>
+            <label><span>Gasoil retour</span><input name="gasoilRetour" type="number" step="0.01"></label>
+          </div>
+        </div>
         <label><span>KM départ voyage</span><input name="kmDepart" type="number" step="1" min="0"></label>
         <label><span>KM arrivée voyage</span><input name="kmArrivee" type="number" step="1" min="0"></label>
         <label class="full"><span>Document du voyage (optionnel)</span><input type="file" name="voyageFile" accept="image/*,.pdf"></label>
         <button class="btn primary full" type="submit">Enregistrer le voyage</button>
       </form>
     </div>
-    <div class="card"><div class="card-header"><div><h2>Liste des voyages</h2><p class="muted">${voyages.length} résultat(s) filtré(s)</p></div></div>${filters}<div class="list">
-      ${voyages.length ? voyages.map(v => `<div class="item-card"><h4><span class="badge">${v.typeVoyage === "aller_retour" ? "Aller-retour" : "Aller simple"}</span> ${escapeHtml(v.depart || "-")} → ${escapeHtml(v.destination || "-")}</h4><p>Client aller : ${escapeHtml(v.client || "-")} | Chauffeur : ${escapeHtml(v.nomChauffeur || chauffeurName(v.chauffeurId))}</p><p>Camion : ${escapeHtml(camionName(v.camionId))}</p><p>Départ : ${formatDate(v.dateDepart)} | Arrivée : ${formatDate(v.dateArrivee)}</p><p>Prix : ${money(v.prixCourse)} | Gasoil : ${money(v.gasoil)} | Frais mission : ${money(v.fraisMission)}</p>${v.typeVoyage === "aller_retour" ? `<p>Retour : ${escapeHtml(v.retourDepart || "-")} → ${escapeHtml(v.retourDestination || "-")}</p><p>Client retour : ${escapeHtml(v.retourClient || "-")} | Prix retour : ${money(v.prixCourseRetour)} | Gasoil retour : ${money(v.gasoilRetour)} | Frais retour : ${money(v.fraisMissionRetour)}</p>` : `<p class="muted">Voyage aller simple</p>`}<p>KM départ : ${v.kmDepart || "-"} | KM arrivée : ${v.kmArrivee || "-"}</p>${voyageAdvancedLine(v)}${v.documentUrl ? `<p><a href="${v.documentUrl}" target="_blank" rel="noopener">Voir le document</a></p>` : ""}<div class="actions"><button class="btn secondary" data-edit-voyage="${v.id}">Modifier</button><button class="btn danger" data-delete-voyage="${v.id}">Supprimer</button></div></div>`).join("") : `<div class="item-card"><p>Aucun voyage pour ces filtres.</p></div>`}
-    </div></div>`;
+
+    <div class="card">
+      <div class="card-header"><div><h2>Liste des voyages</h2><p class="muted">Revenus, coûts, retour</p></div></div>
+      <div class="list">
+        ${state.voyages.length ? state.voyages.map(v => `
+          <div class="item-card">
+            <h4><span class="badge">${v.typeVoyage === "aller_retour" ? "Aller-retour" : "Aller simple"}</span> ${escapeHtml(v.depart || "-")} → ${escapeHtml(v.destination || "-")}</h4>
+            <p>Client aller : ${escapeHtml(v.client || "-")} | Chauffeur : ${escapeHtml(v.nomChauffeur || v.chauffeurId || "-")}</p>
+            <p>Départ : ${formatDate(v.dateDepart)} | Arrivée : ${formatDate(v.dateArrivee)}</p>
+            <p>Prix : ${money(v.prixCourse)} | Gasoil : ${money(v.gasoil)} | Frais mission : ${money(v.fraisMission)}</p>
+            ${v.typeVoyage === "aller_retour" ? `<p>Retour : ${escapeHtml(v.retourDepart || "-")} → ${escapeHtml(v.retourDestination || "-")}</p><p>Client retour : ${escapeHtml(v.retourClient || "-")} | Prix retour : ${money(v.prixCourseRetour)} | Gasoil retour : ${money(v.gasoilRetour)} | Frais retour : ${money(v.fraisMissionRetour)}</p>` : `<p class="muted">Voyage aller simple</p>`}
+            <p>KM départ : ${v.kmDepart || "-"} | KM arrivée : ${v.kmArrivee || "-"}</p>
+            ${voyageAdvancedLine(v)}
+            ${v.documentUrl ? `<p><a href="${v.documentUrl}" target="_blank" rel="noopener">Voir le document</a></p>` : ""}
+            <div class="actions">
+              <button class="btn secondary" data-edit-voyage="${v.id}">Modifier</button>
+              <button class="btn danger" data-delete-voyage="${v.id}">Supprimer</button>
+            </div>
+          </div>
+        `).join("") : `<div class="item-card"><p>Aucun voyage pour le moment.</p></div>`}
+      </div>
+    </div>
+  `;
 }
+
 function entretienHtml() {
-  ensureFilters();
-  const f = state.filters.entretien;
-  const rows = filteredEntretien();
-  const filters = adminFilterBar("entretien", `
-    <label><span>Recherche</span><input data-scope="entretien" data-admin-filter="q" value="${escapeHtml(f.q)}" placeholder="Type, garage, description..."></label>
-    <label><span>Période</span><select data-scope="entretien" data-admin-filter="period">${periodOptions(f.period)}</select></label>
-    <label><span>Camion</span><select data-scope="entretien" data-admin-filter="camionId"><option value="">Tous</option>${optionCamions(f.camionId)}</select></label>
-    <label><span>Type</span><select data-scope="entretien" data-admin-filter="type"><option value="">Tous</option><option value="pneus" ${f.type==="pneus"?"selected":""}>Pneus</option><option value="vidange" ${f.type==="vidange"?"selected":""}>Vidange</option><option value="pieces mecaniques" ${f.type==="pieces mecaniques"?"selected":""}>Pièces mécaniques</option><option value="reparation" ${f.type==="reparation"?"selected":""}>Réparation</option><option value="hotel reparation" ${f.type==="hotel reparation"?"selected":""}>Hôtel réparation</option></select></label>
-    <label><span>Statut</span><select data-scope="entretien" data-admin-filter="status"><option value="">Tous</option><option value="en_attente" ${f.status==="en_attente"?"selected":""}>En attente</option><option value="en_cours" ${f.status==="en_cours"?"selected":""}>En cours</option><option value="repare" ${f.status==="repare"?"selected":""}>Réparé</option></select></label>
-  `);
   return `
-    <div class="card"><div class="card-header"><div><h2>Ajouter un entretien</h2><p class="muted">Pneus, vidange, pièces, réparation. Quand tu mets Réparé, le compteur alerte du camion repart à zéro.</p></div></div><form id="entretienForm" class="form-grid">
-      <label><span>Camion</span><select name="camionId"><option value="">Choisir</option>${state.camions.map(c => `<option value="${c.id}">${escapeHtml(c.numeroCamion)}</option>`).join("")}</select></label>
-      <label><span>Type</span><select name="type" required><option value="pneus">Pneus</option><option value="vidange">Vidange</option><option value="pieces mecaniques">Pièces mécaniques</option><option value="reparation">Frais de réparation</option><option value="hotel reparation">Hôtel réparation</option></select></label>
-      <label><span>Coût</span><input name="cout" type="number" step="0.01"></label><label><span>Date</span><input name="date" type="datetime-local"></label><label><span>Statut</span><select name="status"><option value="repare">Réparé (reset alerte)</option><option value="en_cours">En cours</option><option value="en_attente">En attente</option></select></label><label><span>Garage</span><input name="garage"></label><label><span>KM lors entretien</span><input name="kmEntretien" type="number" placeholder="Ex: 125000"></label><label><span>Intervalle prochain entretien (km)</span><input name="intervalKm" type="number" placeholder="Ex: 10000"></label><label><span>Remorque ?</span><select name="remorque"><option value="false">Non</option><option value="true">Oui</option></select></label><label class="full"><span>Description</span><textarea name="description"></textarea></label><label class="full"><span>Facture / photo (optionnel)</span><input type="file" name="entretienFile" accept="image/*,.pdf"></label><button class="btn primary full" type="submit">Enregistrer l'entretien</button>
-    </form></div>
-    <div class="card"><div class="card-header"><div><h2>Liste des entretiens</h2><p class="muted">${rows.length} résultat(s) filtré(s)</p></div></div>${filters}<div class="list">
-      ${rows.length ? rows.map(e => `<div class="item-card"><h4>${escapeHtml(e.type || "-")} ${entretienStatusPill(e.status)}</h4><p>Camion : ${escapeHtml(camionName(e.camionId))}</p><p>Coût : ${money(e.cout)} | Date : ${formatDate(e.date)}</p>${e.dateReparation ? `<p>Réparé le : ${formatDate(e.dateReparation)} · Compteur alerte remis à zéro</p>` : ""}<p>Garage : ${escapeHtml(e.garage || "-")} | Remorque : ${e.remorque ? "Oui" : "Non"}</p><p>Description : ${escapeHtml(e.description || "-")}</p>${e.documentUrl ? `<p><a href="${e.documentUrl}" target="_blank" rel="noopener">Voir facture/document</a></p>` : ""}<div class="actions"><button class="btn secondary" data-status-entretien="${e.id}" data-status-value="en_attente">En attente</button><button class="btn secondary" data-status-entretien="${e.id}" data-status-value="en_cours">En cours</button><button class="btn success" data-status-entretien="${e.id}" data-status-value="repare">Réparé</button><button class="btn secondary" data-edit-entretien="${e.id}">Modifier</button><button class="btn danger" data-delete-entretien="${e.id}">Supprimer</button></div></div>`).join("") : `<div class="item-card"><p>Aucun entretien pour ces filtres.</p></div>`}
-    </div></div>`;
+    <div class="card">
+      <div class="card-header"><div><h2>Ajouter un entretien</h2><p class="muted">Pneus, vidange, pièces, réparation. Quand tu mets Réparé, le compteur alerte du camion repart à zéro.</p></div></div>
+      <form id="entretienForm" class="form-grid">
+        <label><span>Camion</span><select name="camionId"><option value="">Choisir</option>${state.camions.map(c => `<option value="${c.id}">${escapeHtml(c.numeroCamion)}</option>`).join("")}</select></label>
+        <label><span>Type</span><select name="type" required>
+          <option value="pneus">Pneus</option>
+          <option value="vidange">Vidange</option>
+          <option value="pieces mecaniques">Pièces mécaniques</option>
+          <option value="reparation">Frais de réparation</option>
+          <option value="hotel reparation">Hôtel réparation</option>
+        </select></label>
+        <label><span>Coût</span><input name="cout" type="number" step="0.01"></label>
+        <label><span>Date</span><input name="date" type="datetime-local"></label>
+        <label><span>Statut</span><select name="status"><option value="repare">Réparé (reset alerte)</option><option value="en_cours">En cours</option><option value="en_attente">En attente</option></select></label>
+        <label><span>Garage</span><input name="garage"></label>
+        <label><span>KM lors entretien</span><input name="kmEntretien" type="number" placeholder="Ex: 125000"></label>
+        <label><span>Intervalle prochain entretien (km)</span><input name="intervalKm" type="number" placeholder="Ex: 10000"></label>
+        <label><span>Remorque ?</span><select name="remorque"><option value="false">Non</option><option value="true">Oui</option></select></label>
+        <label class="full"><span>Description</span><textarea name="description"></textarea></label>
+        <label class="full"><span>Facture / photo (optionnel)</span><input type="file" name="entretienFile" accept="image/*,.pdf"></label>
+        <button class="btn primary full" type="submit">Enregistrer l'entretien</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div><h2>Liste des entretiens</h2><p class="muted">Historique mécanique</p></div></div>
+      <div class="list">
+        ${state.entretien.length ? state.entretien.map(e => `
+          <div class="item-card">
+            <h4>${escapeHtml(e.type || "-")} ${entretienStatusPill(e.status)}</h4>
+            <p>Coût : ${money(e.cout)} | Date : ${formatDate(e.date)}</p>
+            ${e.dateReparation ? `<p>Réparé le : ${formatDate(e.dateReparation)} · Compteur alerte remis à zéro</p>` : ""}
+            <p>Garage : ${escapeHtml(e.garage || "-")} | Remorque : ${e.remorque ? "Oui" : "Non"}</p>
+            <p>Description : ${escapeHtml(e.description || "-")}</p>
+            ${entretienProgressCircle(e, true)}
+            ${e.documentUrl ? `<p><a href="${e.documentUrl}" target="_blank" rel="noopener">Voir la facture</a></p>` : ""}
+            <div class="actions">
+              <button class="btn secondary" data-status-entretien="${e.id}" data-status-value="en_attente">En attente</button>
+              <button class="btn warning" data-status-entretien="${e.id}" data-status-value="en_cours">En cours</button>
+              <button class="btn success" data-status-entretien="${e.id}" data-status-value="repare">Réparé</button>
+              <button class="btn secondary" data-edit-entretien="${e.id}">Modifier</button>
+              <button class="btn danger" data-delete-entretien="${e.id}">Supprimer</button>
+            </div>
+          </div>
+        `).join("") : `<div class="item-card"><p>Aucun entretien pour le moment.</p></div>`}
+      </div>
+    </div>
+  `;
 }
+
+
 function alertesEntretienHtml() {
   const items = entretienAlerts();
   const danger = items.filter(x => x.progress.status === 'danger').length;
@@ -768,11 +602,12 @@ function alertesEntretienHtml() {
   const models = state.alertesEntretien;
   return `
     <div class="card maintenance-hero">
-      <div><p class="eyebrow">Alertes entretien</p><h2>Alertes à suivre par kilométrage</h2><p class="muted">Affichage compact : une seule carte par camion.</p></div>
+      <div><p class="eyebrow">Alertes entretien</p><h2>Alertes à suivre par kilométrage</h2><p class="muted">L’admin crée les entretiens à suivre une seule fois. Exemple: Vidange chaque 10 000 km. L’app calcule ensuite la progression pour chaque camion.</p></div>
       <div class="driver-mini-stats"><div><strong>${models.length}</strong><span>Alertes créées</span></div><div><strong>${warning}</strong><span>À surveiller</span></div><div><strong>${danger}</strong><span>Urgents</span></div></div>
     </div>
+
     <div class="card">
-      <div class="card-header"><div><h2>Créer une alerte à suivre</h2><p class="muted">Exemples: Vidange 10 000 km, pneus 50 000 km.</p></div></div>
+      <div class="card-header"><div><h2>Créer une alerte à suivre</h2><p class="muted">Exemples: Vidange 10 000 km, pneus 50 000 km, contrôle frein 20 000 km.</p></div></div>
       <form id="alerteEntretienForm" class="form-grid">
         <label><span>Nom / type entretien</span><input name="type" required placeholder="Ex: Vidange"></label>
         <label><span>KM à attendre</span><input name="intervalKm" type="number" required placeholder="Ex: 10000"></label>
@@ -782,34 +617,90 @@ function alertesEntretienHtml() {
         <button class="btn primary full" type="submit">Ajouter l’alerte</button>
       </form>
     </div>
-    <div class="card"><div class="card-header"><div><h2>Alertes configurées</h2><p class="muted">Ces règles s’appliquent automatiquement à tous les camions.</p></div></div><div class="list">
-      ${models.length ? models.map(a => `<div class="item-card"><h4>${escapeHtml(a.type || '-')} · ${numberOrZero(a.intervalKm).toLocaleString('fr-CA')} km</h4><p>Statut : <strong>${escapeHtml(a.status || 'actif')}</strong> · Orange à ${numberOrZero(a.warningPercent || 80)}%</p><p class="muted">${escapeHtml(a.description || '')}</p><div class="actions"><button class="btn secondary" data-edit-alerte-entretien="${a.id}">Modifier</button><button class="btn danger" data-delete-alerte-entretien="${a.id}">Supprimer</button></div></div>`).join('') : `<div class="item-card"><p>Aucune alerte créée. Ajoute par exemple Vidange / 10000 km.</p></div>`}
-    </div></div>
-    <div class="card"><div class="card-header"><div><h2>Suivi compact par camion</h2><p class="muted">Vert = OK, orange = bientôt, rouge = dépassé.</p></div></div><div class="maintenance-truck-grid">${entretienGroupedByCamionHtml(items)}</div></div>
+
+    <div class="card">
+      <div class="card-header"><div><h2>Alertes configurées</h2><p class="muted">Ces règles s’appliquent automatiquement à tous les camions.</p></div></div>
+      <div class="list">
+        ${models.length ? models.map(a => `
+          <div class="item-card">
+            <h4>${escapeHtml(a.type || '-')} · ${numberOrZero(a.intervalKm).toLocaleString('fr-CA')} km</h4>
+            <p>Statut : <strong>${escapeHtml(a.status || 'actif')}</strong> · Orange à ${numberOrZero(a.warningPercent || 80)}%</p>
+            <p class="muted">${escapeHtml(a.description || '')}</p>
+            <div class="actions">
+              <button class="btn secondary" data-edit-alerte-entretien="${a.id}">Modifier</button>
+              <button class="btn danger" data-delete-alerte-entretien="${a.id}">Supprimer</button>
+            </div>
+          </div>
+        `).join('') : `<div class="item-card"><p>Aucune alerte créée. Ajoute par exemple Vidange / 10000 km.</p></div>`}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div><h2>Suivi par camion</h2><p class="muted">Vert = OK, orange = bientôt, rouge = entretien dépassé.</p></div></div>
+      <div class="maintenance-list">
+        ${items.length ? items.map(e => `
+          <div class="maintenance-alert-card ${e.progress.status}">
+            <div class="maintenance-alert-main">
+              <div><h3>${escapeHtml(camionName(e.camionId))}</h3><p>${escapeHtml(e.type || 'Entretien')}</p><p class="muted">Dernier entretien: ${e.lastEntretienDate ? formatDate(e.lastEntretienDate) : 'non renseigné'} · Départ: ${e.progress.startKm.toLocaleString('fr-CA')} km</p></div>
+              ${entretienProgressCircle(e)}
+            </div>
+            <div class="maintenance-details">
+              <span>Intervalle: ${e.progress.intervalKm.toLocaleString('fr-CA')} km</span>
+              <span>KM utilisés: ${e.progress.usedKm.toLocaleString('fr-CA')} km</span>
+              <span>Restant: ${e.progress.remainingKm.toLocaleString('fr-CA')} km</span>
+            </div>
+            ${e.progress.status === 'danger' ? '<div class="alert-text danger">Entretien dépassé: planifie une intervention.</div>' : e.progress.status === 'warning' ? '<div class="alert-text warning">Attention: entretien bientôt nécessaire.</div>' : '<div class="alert-text ok">Situation normale.</div>'}
+          </div>
+        `).join('') : `<div class="item-card"><p>Ajoute au moins un camion et une alerte à suivre pour voir les cercles.</p></div>`}
+      </div>
+    </div>
   `;
 }
 
 function depensesHtml() {
-  ensureFilters();
-  const f = state.filters.depenses;
-  const rows = filteredDepenses();
-  const types = [...new Set(state.depenses.map(d => d.type).filter(Boolean))].sort();
-  const filters = adminFilterBar("depenses", `
-    <label><span>Recherche</span><input data-scope="depenses" data-admin-filter="q" value="${escapeHtml(f.q)}" placeholder="Type, description..."></label>
-    <label><span>Période</span><select data-scope="depenses" data-admin-filter="period">${periodOptions(f.period)}</select></label>
-    <label><span>Camion</span><select data-scope="depenses" data-admin-filter="camionId"><option value="">Tous</option>${optionCamions(f.camionId)}</select></label>
-    <label><span>Chauffeur</span><select data-scope="depenses" data-admin-filter="chauffeurId"><option value="">Tous</option>${optionChauffeurs(f.chauffeurId)}</select></label>
-    <label><span>Type</span><select data-scope="depenses" data-admin-filter="type"><option value="">Tous</option>${types.map(t => `<option value="${escapeHtml(t)}" ${f.type===t?"selected":""}>${escapeHtml(t)}</option>`).join("")}</select></label>
-  `);
-  const total = rows.reduce((s,d)=>s+numberOrZero(d.montant),0);
   return `
-    <div class="card"><div class="card-header"><div><h2>Ajouter une dépense</h2><p class="muted">Assurance, salaire, comptable, marchandise</p></div></div><form id="depenseForm" class="form-grid">
-      <label><span>Type</span><select name="type" required><option>Assurance chauffeur</option><option>Frais comptable</option><option>Déclaration d’impôts</option><option>Salaire chauffeur</option><option>Assurance du camion</option><option>Assurance marchandise</option><option>Autre</option></select></label><label><span>Montant</span><input name="montant" type="number" step="0.01"></label><label><span>Date</span><input name="date" type="datetime-local"></label><label><span>Camion</span><select name="camionId"><option value="">Aucun</option>${optionCamions()}</select></label><label><span>Chauffeur</span><select name="chauffeurId"><option value="">Aucun</option>${optionChauffeurs()}</select></label><label class="full"><span>Description</span><textarea name="description"></textarea></label><label class="full"><span>Reçu / facture (optionnel)</span><input type="file" name="depenseFile" accept="image/*,.pdf"></label><button class="btn primary full" type="submit">Ajouter dépense</button>
-    </form></div>
-    <div class="card"><div class="card-header"><div><h2>Liste des dépenses</h2><p class="muted">${rows.length} résultat(s) · total ${money(total)}</p></div></div>${filters}<div class="list">
-      ${rows.length ? rows.map(d => `<div class="item-card"><h4>${escapeHtml(d.type || "-")} - ${money(d.montant)}</h4><p>Date : ${formatDate(d.date)} | Camion : ${escapeHtml(camionName(d.camionId))} | Chauffeur : ${escapeHtml(chauffeurName(d.chauffeurId))}</p><p>${escapeHtml(d.description || "")}</p>${d.documentUrl ? `<p><a href="${d.documentUrl}" target="_blank" rel="noopener">Voir reçu/document</a></p>` : ""}<div class="actions"><button class="btn secondary" data-edit-depense="${d.id}">Modifier</button><button class="btn danger" data-delete-depense="${d.id}">Supprimer</button></div></div>`).join("") : `<div class="item-card"><p>Aucune dépense pour ces filtres.</p></div>`}
-    </div></div>`;
+    <div class="card">
+      <div class="card-header"><div><h2>Ajouter une dépense</h2><p class="muted">Assurance, comptable, impôts, salaire...</p></div></div>
+      <form id="depenseForm" class="form-grid">
+        <label><span>Type</span><select name="type" required>
+          <option value="assurance chauffeur">Assurance chauffeur</option>
+          <option value="frais comptable">Frais comptable</option>
+          <option value="declaration impots">Déclaration d'impôts</option>
+          <option value="salaire chauffeur">Salaire chauffeur</option>
+          <option value="assurance camion">Assurance du camion</option>
+          <option value="assurance marchandise">Assurance de marchandise</option>
+        </select></label>
+        <label><span>Montant</span><input name="montant" type="number" step="0.01"></label>
+        <label><span>Camion (optionnel)</span><select name="camionId"><option value="">Choisir</option>${state.camions.map(c => `<option value="${c.id}">${escapeHtml(c.numeroCamion)}</option>`).join("")}</select></label>
+        <label><span>Chauffeur UID (optionnel)</span><input name="chauffeurId"></label>
+        <label><span>Date</span><input name="date" type="datetime-local"></label>
+        <label class="full"><span>Description</span><textarea name="description"></textarea></label>
+        <label class="full"><span>Reçu / facture (optionnel)</span><input type="file" name="depenseFile" accept="image/*,.pdf"></label>
+        <button class="btn primary full" type="submit">Enregistrer la dépense</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div><h2>Liste des dépenses</h2><p class="muted">Toutes les dépenses diverses</p></div></div>
+      <div class="list">
+        ${state.depenses.length ? state.depenses.map(d => `
+          <div class="item-card">
+            <h4>${escapeHtml(d.type || "-")}</h4>
+            <p>Montant : ${money(d.montant)} | Date : ${formatDate(d.date)}</p>
+            <p>Description : ${escapeHtml(d.description || "-")}</p>
+            ${d.documentUrl ? `<p><a href="${d.documentUrl}" target="_blank" rel="noopener">Voir le reçu</a></p>` : ""}
+            <div class="actions">
+              <button class="btn secondary" data-edit-depense="${d.id}">Modifier</button>
+              <button class="btn danger" data-delete-depense="${d.id}">Supprimer</button>
+            </div>
+          </div>
+        `).join("") : `<div class="item-card"><p>Aucune dépense pour le moment.</p></div>`}
+      </div>
+    </div>
+  `;
 }
+
+
 function kmNumber(record) {
   return Number(record?.kilometrage ?? record?.km ?? record?.odometre ?? 0) || 0;
 }
@@ -889,19 +780,6 @@ function buildKmStats(groupField) {
 }
 
 function statsKmHtml() {
-  ensureFilters();
-  const f = state.filters.statskm;
-  const oldOdo = state.odometres;
-  const oldVoyages = state.voyages;
-  const odos = filteredOdometres("statskm");
-  const voyages = state.voyages.filter(v => (!f.camionId || v.camionId === f.camionId) && (!f.chauffeurId || v.chauffeurId === f.chauffeurId) && inPeriod(v, f.period));
-  const filters = adminFilterBar("statskm", `
-    <label><span>Période</span><select data-scope="statskm" data-admin-filter="period">${periodOptions(f.period)}</select></label>
-    <label><span>Camion</span><select data-scope="statskm" data-admin-filter="camionId"><option value="">Tous</option>${optionCamions(f.camionId)}</select></label>
-    <label><span>Chauffeur</span><select data-scope="statskm" data-admin-filter="chauffeurId"><option value="">Tous</option>${optionChauffeurs(f.chauffeurId)}</select></label>
-  `);
-  state.odometres = odos;
-  state.voyages = voyages;
   const totalEntries = state.odometres.length;
   const totalDistance = buildKmStats("camionId").reduce((sum, x) => sum + x.distance, 0);
   const activeDrivers = new Set(state.odometres.map(x => x.chauffeurId).filter(Boolean)).size;
@@ -915,36 +793,38 @@ function statsKmHtml() {
   const profitParKm = voyageDistanceTotal ? voyageProfitTotal / voyageDistanceTotal : 0;
   const recent = [...state.odometres].sort((a,b) => dateMillis(b.date || b.createdAt) - dateMillis(a.date || a.createdAt)).slice(0, 20);
   const alerts = byCamion.filter(x => x.daysSince !== null && x.daysSince >= 2);
-  state.odometres = oldOdo;
-  state.voyages = oldVoyages;
+
   return `
-    <div class="km-hero card"><div><p class="eyebrow">Stats KM Pro</p><h2>Contrôle kilométrage camions</h2><p class="muted">Suivi filtrable par période, camion et chauffeur.</p></div><div class="driver-mini-stats"><div><strong>${totalEntries}</strong><span>Relevés</span></div><div><strong>${activeTrucks}</strong><span>Camions</span></div><div><strong>${activeDrivers}</strong><span>Chauffeurs</span></div></div></div>
-    ${filters}
-    <div class="stats-grid"><div class="card stat-card"><div class="label">Distance estimée</div><div class="value">${totalDistance.toLocaleString("fr-CA")} km</div></div><div class="card stat-card"><div class="label">Derniers relevés</div><div class="value">${recent.length}</div></div><div class="card stat-card"><div class="label">Alertes KM</div><div class="value">${alerts.length}</div></div><div class="card stat-card"><div class="label">Moyenne/camion</div><div class="value">${activeTrucks ? Math.round(totalDistance / activeTrucks).toLocaleString("fr-CA") : 0} km</div></div><div class="card stat-card"><div class="label">Conso moyenne voyages</div><div class="value">${ratio(consoMoyenne, " /100 km")}</div></div><div class="card stat-card"><div class="label">Bénéfice moyen/km</div><div class="value">${ratio(profitParKm, " DA/km")}</div></div></div>
-    <div class="card"><div class="card-header"><div><h2>Par camion</h2><p class="muted">Distance = dernier KM - premier KM enregistré.</p></div></div><div class="list">${byCamion.length ? byCamion.map(x => `<div class="item-card km-row"><div><h4>${escapeHtml(camionName(x.key))}</h4><p>Premier KM : ${x.firstKm.toLocaleString("fr-CA")} · Dernier KM : ${x.lastKm.toLocaleString("fr-CA")}</p><p>Dernier relevé : ${dateLabel(x.last.date || x.last.createdAt)} par ${escapeHtml(chauffeurName(x.last.chauffeurId))}</p></div><div class="driver-score"><strong>${x.distance.toLocaleString("fr-CA")}</strong><span>km</span></div></div>`).join("") : `<div class="item-card"><p>Aucun relevé KM.</p></div>`}</div></div>
-    <div class="card"><div class="card-header"><div><h2>Rentabilité voyages</h2><p class="muted">Basée sur KM départ / KM arrivée par voyage.</p></div></div><div class="list">${voyages.length ? voyages.map(v => `<div class="item-card km-row"><div><h4>${escapeHtml(v.client || "-")} → ${escapeHtml(v.destination || "-")}</h4><p>Camion : ${escapeHtml(camionName(v.camionId))} · Chauffeur : ${escapeHtml(v.nomChauffeur || chauffeurName(v.chauffeurId))}</p>${voyageAdvancedLine(v)}</div><div class="driver-score"><strong>${money(voyageProfit(v))}</strong><span>bénéfice</span></div></div>`).join("") : `<div class="item-card"><p>Aucun voyage avec données KM.</p></div>`}</div></div>
-    <div class="card"><div class="card-header"><div><h2>Par chauffeur</h2><p class="muted">Performance kilométrage par chauffeur.</p></div></div><div class="list">${byChauffeur.length ? byChauffeur.map(x => `<div class="item-card km-row"><div><h4>${escapeHtml(chauffeurName(x.key))}</h4><p>Relevés : ${x.count} · Dernier KM : ${x.lastKm.toLocaleString("fr-CA")}</p><p>Dernier camion : ${escapeHtml(camionName(x.last.camionId))} · ${dateLabel(x.last.date || x.last.createdAt)}</p></div><div class="driver-score"><strong>${x.distance.toLocaleString("fr-CA")}</strong><span>km</span></div></div>`).join("") : `<div class="item-card"><p>Aucun relevé chauffeur.</p></div>`}</div></div>
-    <div class="card"><div class="card-header"><div><h2>Alertes de suivi</h2><p class="muted">Camions sans relevé depuis 2 jours ou plus.</p></div></div><div class="list">${alerts.length ? alerts.map(x => `<div class="item-card alert-card"><h4>⚠️ ${escapeHtml(camionName(x.key))}</h4><p>Dernier relevé il y a ${x.daysSince} jour(s) · Dernier KM ${x.lastKm.toLocaleString("fr-CA")}</p></div>`).join("") : `<div class="item-card"><p>Aucune alerte. Les relevés KM sont à jour.</p></div>`}</div></div>
-    <div class="card"><div class="card-header"><div><h2>Historique récent</h2><p class="muted">20 derniers relevés KM.</p></div></div><div class="list">${recent.length ? recent.map(r => `<div class="item-card km-row"><div><h4>${kmNumber(r).toLocaleString("fr-CA")} km</h4><p>${escapeHtml(chauffeurName(r.chauffeurId))} · ${escapeHtml(camionName(r.camionId))}</p><p>${dateLabel(r.date || r.createdAt)} ${r.note ? "· " + escapeHtml(r.note) : ""}</p></div></div>`).join("") : `<div class="item-card"><p>Aucun historique.</p></div>`}</div></div>`;
+    <div class="km-hero card">
+      <div><p class="eyebrow">Stats KM Pro</p><h2>Contrôle kilométrage camions</h2><p class="muted">Suivi par camion, chauffeur, dernier relevé et alertes de saisie.</p></div>
+      <div class="driver-mini-stats"><div><strong>${totalEntries}</strong><span>Relevés</span></div><div><strong>${activeTrucks}</strong><span>Camions</span></div><div><strong>${activeDrivers}</strong><span>Chauffeurs</span></div></div>
+    </div>
+    <div class="stats-grid">
+      <div class="card stat-card"><div class="label">Distance estimée</div><div class="value">${totalDistance.toLocaleString("fr-CA")} km</div></div>
+      <div class="card stat-card"><div class="label">Derniers relevés</div><div class="value">${recent.length}</div></div>
+      <div class="card stat-card"><div class="label">Alertes KM</div><div class="value">${alerts.length}</div></div>
+      <div class="card stat-card"><div class="label">Moyenne/camion</div><div class="value">${activeTrucks ? Math.round(totalDistance / activeTrucks).toLocaleString("fr-CA") : 0} km</div></div>
+      <div class="card stat-card"><div class="label">Conso moyenne voyages</div><div class="value">${ratio(consoMoyenne, " /100 km")}</div></div>
+      <div class="card stat-card"><div class="label">Bénéfice moyen/km</div><div class="value">${ratio(profitParKm, " DA/km")}</div></div>
+    </div>
+    <div class="card"><div class="card-header"><div><h2>Par camion</h2><p class="muted">Distance = dernier KM - premier KM enregistré.</p></div></div><div class="list">
+      ${byCamion.length ? byCamion.map(x => `<div class="item-card km-row"><div><h4>${escapeHtml(camionName(x.key))}</h4><p>Premier KM : ${x.firstKm.toLocaleString("fr-CA")} · Dernier KM : ${x.lastKm.toLocaleString("fr-CA")}</p><p>Dernier relevé : ${dateLabel(x.last.date || x.last.createdAt)} par ${escapeHtml(chauffeurName(x.last.chauffeurId))}</p></div><div class="driver-score"><strong>${x.distance.toLocaleString("fr-CA")}</strong><span>km</span></div></div>`).join("") : `<div class="item-card"><p>Aucun relevé KM.</p></div>`}
+    </div></div>
+
+    <div class="card"><div class="card-header"><div><h2>Rentabilité voyages</h2><p class="muted">Basée sur KM départ / KM arrivée par voyage.</p></div></div><div class="list">
+      ${state.voyages.length ? state.voyages.map(v => `<div class="item-card km-row"><div><h4>${escapeHtml(v.client || "-")} → ${escapeHtml(v.destination || "-")}</h4><p>Camion : ${escapeHtml(camionName(v.camionId))} · Chauffeur : ${escapeHtml(v.nomChauffeur || chauffeurName(v.chauffeurId))}</p>${voyageAdvancedLine(v)}</div><div class="driver-score"><strong>${money(voyageProfit(v))}</strong><span>bénéfice</span></div></div>`).join("") : `<div class="item-card"><p>Aucun voyage avec données KM.</p></div>`}
+    </div></div>
+    <div class="card"><div class="card-header"><div><h2>Par chauffeur</h2><p class="muted">Performance kilométrage par chauffeur.</p></div></div><div class="list">
+      ${byChauffeur.length ? byChauffeur.map(x => `<div class="item-card km-row"><div><h4>${escapeHtml(chauffeurName(x.key))}</h4><p>Relevés : ${x.count} · Dernier KM : ${x.lastKm.toLocaleString("fr-CA")}</p><p>Dernier camion : ${escapeHtml(camionName(x.last.camionId))} · ${dateLabel(x.last.date || x.last.createdAt)}</p></div><div class="driver-score"><strong>${x.distance.toLocaleString("fr-CA")}</strong><span>km</span></div></div>`).join("") : `<div class="item-card"><p>Aucun relevé chauffeur.</p></div>`}
+    </div></div>
+    <div class="card"><div class="card-header"><div><h2>Alertes de suivi</h2><p class="muted">Camions sans relevé depuis 2 jours ou plus.</p></div></div><div class="list">
+      ${alerts.length ? alerts.map(x => `<div class="item-card alert-card"><h4>⚠️ ${escapeHtml(camionName(x.key))}</h4><p>Dernier relevé il y a ${x.daysSince} jour(s) · Dernier KM ${x.lastKm.toLocaleString("fr-CA")}</p></div>`).join("") : `<div class="item-card"><p>Aucune alerte. Les relevés KM sont à jour.</p></div>`}
+    </div></div>
+    <div class="card"><div class="card-header"><div><h2>Historique récent</h2><p class="muted">20 derniers relevés KM.</p></div></div><div class="list">
+      ${recent.length ? recent.map(r => `<div class="item-card km-row"><div><h4>${kmNumber(r).toLocaleString("fr-CA")} km</h4><p>${escapeHtml(chauffeurName(r.chauffeurId))} · ${escapeHtml(camionName(r.camionId))}</p><p>${dateLabel(r.date || r.createdAt)} ${r.note ? "· " + escapeHtml(r.note) : ""}</p></div></div>`).join("") : `<div class="item-card"><p>Aucun historique.</p></div>`}
+    </div></div>`;
 }
 
-function render() {
-  document.getElementById("dashboardView").innerHTML = dashboardHtml();
-  document.getElementById("camionsView").innerHTML = camionFormHtml() + camionsListHtml();
-  document.getElementById("chauffeursView").innerHTML = chauffeursHtml();
-  document.getElementById("voyagesView").innerHTML = voyagesHtml();
-  document.getElementById("entretienView").innerHTML = entretienHtml();
-  document.getElementById("alertesEntretienView").innerHTML = alertesEntretienHtml();
-  document.getElementById("depensesView").innerHTML = depensesHtml();
-  const statsView = document.getElementById("statskmView");
-  if (statsView) statsView.innerHTML = statsKmHtml();
-  const profitView = document.getElementById("profitView");
-  if (profitView) profitView.innerHTML = profitPerformanceHtml();
-  document.getElementById("parametresView").innerHTML = parametresHtml();
-  bindForms();
-  bindActions();
-  bindAdminFilters();
-}
 function parametresHtml() {
   return `
     <div class="card">
@@ -962,6 +842,21 @@ function parametresHtml() {
       </div>
     </div>
   `;
+}
+
+function render() {
+  document.getElementById("dashboardView").innerHTML = dashboardHtml();
+  document.getElementById("camionsView").innerHTML = camionFormHtml() + camionsListHtml();
+  document.getElementById("chauffeursView").innerHTML = chauffeursHtml();
+  document.getElementById("voyagesView").innerHTML = voyagesHtml();
+  document.getElementById("entretienView").innerHTML = entretienHtml();
+  document.getElementById("alertesEntretienView").innerHTML = alertesEntretienHtml();
+  document.getElementById("depensesView").innerHTML = depensesHtml();
+  const statsView = document.getElementById("statskmView");
+  if (statsView) statsView.innerHTML = statsKmHtml();
+  document.getElementById("parametresView").innerHTML = parametresHtml();
+  bindForms();
+  bindActions();
 }
 
 async function safeLoad(label, loader) {
