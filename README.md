@@ -178,3 +178,10 @@ Après upload sur GitHub, recharge avec:
 ## Correctif dashboard
 - Correction de l’erreur `alertesEntretienHtml` manquante.
 - Recharge avec `?v=fix-alertes1`.
+
+
+## Cercles Ultra Pro Animés
+- Remplace les lignes par des cercles SVG animés.
+- 1 carte par camion.
+- Filtres camion/type/statut/recherche.
+- Recharge: ?v=cercle-ultra-pro1
