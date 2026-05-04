@@ -180,8 +180,5 @@ Après upload sur GitHub, recharge avec:
 - Recharge avec `?v=fix-alertes1`.
 
 
-## Cercles Ultra Pro Animés
-- Remplace les lignes par des cercles SVG animés.
-- 1 carte par camion.
-- Filtres camion/type/statut/recherche.
-- Recharge: ?v=cercle-ultra-pro1
+## Fix téléchargement et filtres revenus
+ZIP vérifié avec unzip -t. Recharge: ?v=revenus-corrige2

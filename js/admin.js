@@ -209,48 +209,19 @@ function entretienAlerts() {
     .sort((a,b) => b.progress.percent - a.progress.percent);
 }
 
-
-function entretienGroupedByCamionHtml(items) {
-  const byCamion = {};
-  items.forEach(e => {
-    if (!byCamion[e.camionId]) byCamion[e.camionId] = [];
-    byCamion[e.camionId].push(e);
-  });
-  const groups = Object.keys(byCamion).map(camionId => {
-    const rows = byCamion[camionId].sort((a,b)=>b.progress.percent-a.progress.percent);
-    const maxStatus = rows.some(x=>x.progress.status==='danger') ? 'danger' : rows.some(x=>x.progress.status==='warning') ? 'warning' : 'ok';
-    return { camionId, rows, maxStatus, maxPercent: Math.max(...rows.map(x=>x.progress.percent)) };
-  }).sort((a,b)=>b.maxPercent-a.maxPercent);
-  if (!groups.length) return `<div class="item-card"><p>Ajoute au moins un camion et une alerte à suivre.</p></div>`;
-  return groups.map(g => `
-    <div class="maintenance-truck-card ${g.maxStatus}">
-      <div class="maintenance-truck-head">
-        <div><h3>🚛 ${escapeHtml(camionName(g.camionId))}</h3><p class="muted">${g.rows.length} entretien(s) suivi(s)</p></div>
-        <span class="status-pill repair ${g.maxStatus==='danger'?'en_attente':g.maxStatus==='warning'?'en_cours':'repare'}">${g.maxStatus==='danger'?'Urgent':g.maxStatus==='warning'?'Bientôt':'OK'}</span>
-      </div>
-      <div class="maintenance-compact-list">
-        ${g.rows.map(e => {
-          const p = e.progress;
-          return `<div class="maintenance-compact-row ${p.status}">
-            <div class="maintenance-row-top"><strong>${escapeHtml(e.type || 'Entretien')}</strong><span>${p.percent}%</span></div>
-            <div class="maintenance-bar"><div class="maintenance-bar-fill ${p.status}" style="width:${p.percent}%"></div></div>
-            <div class="maintenance-row-meta"><span>${p.remainingKm.toLocaleString('fr-CA')} km restants</span><span>Actuel: ${p.currentKm.toLocaleString('fr-CA')} km</span><span>Départ: ${p.startKm.toLocaleString('fr-CA')} km</span></div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>
-  `).join('');
-}
-
 function dashboardEntretienHtml() {
-  const items = entretienAlerts();
-  const danger = items.filter(x => x.progress.status === 'danger').length;
-  const warning = items.filter(x => x.progress.status === 'warning').length;
+  const items = entretienAlerts().slice(0, 6);
   return `
     <div class="card maintenance-dashboard-card">
-      <div class="card-header"><div><h2>Suivi entretien</h2><p class="muted">Vue compacte: 1 carte par camion.</p></div><button class="btn secondary" data-go-alertes>Voir alertes</button></div>
-      <div class="driver-mini-stats"><div><strong>${items.length}</strong><span>Suivis</span></div><div><strong>${warning}</strong><span>Bientôt</span></div><div><strong>${danger}</strong><span>Urgents</span></div></div>
-      <div class="maintenance-truck-grid">${entretienGroupedByCamionHtml(items)}</div>
+      <div class="card-header"><div><h2>Suivi entretien</h2><p class="muted">Progression kilométrage par camion et type d'entretien.</p></div><button class="btn secondary" data-go-alertes>Voir alertes</button></div>
+      <div class="maintenance-grid">
+        ${items.length ? items.map(e => `
+          <div class="maintenance-mini-card">
+            <div><h4>${escapeHtml(camionName(e.camionId))}</h4><p>${escapeHtml(e.type || 'Entretien')}</p></div>
+            ${entretienProgressCircle(e, true)}
+          </div>
+        `).join('') : `<div class="item-card"><p>Aucun entretien avec kilométrage. Ajoute un entretien avec KM entretien et intervalle KM.</p></div>`}
+      </div>
     </div>
   `;
 }
@@ -768,11 +739,12 @@ function alertesEntretienHtml() {
   const models = state.alertesEntretien;
   return `
     <div class="card maintenance-hero">
-      <div><p class="eyebrow">Alertes entretien</p><h2>Alertes à suivre par kilométrage</h2><p class="muted">Affichage compact : une seule carte par camion.</p></div>
+      <div><p class="eyebrow">Alertes entretien</p><h2>Alertes à suivre par kilométrage</h2><p class="muted">L’admin crée les entretiens à suivre une seule fois. Exemple: Vidange chaque 10 000 km. L’app calcule ensuite la progression pour chaque camion.</p></div>
       <div class="driver-mini-stats"><div><strong>${models.length}</strong><span>Alertes créées</span></div><div><strong>${warning}</strong><span>À surveiller</span></div><div><strong>${danger}</strong><span>Urgents</span></div></div>
     </div>
+
     <div class="card">
-      <div class="card-header"><div><h2>Créer une alerte à suivre</h2><p class="muted">Exemples: Vidange 10 000 km, pneus 50 000 km.</p></div></div>
+      <div class="card-header"><div><h2>Créer une alerte à suivre</h2><p class="muted">Exemples: Vidange 10 000 km, pneus 50 000 km, contrôle frein 20 000 km.</p></div></div>
       <form id="alerteEntretienForm" class="form-grid">
         <label><span>Nom / type entretien</span><input name="type" required placeholder="Ex: Vidange"></label>
         <label><span>KM à attendre</span><input name="intervalKm" type="number" required placeholder="Ex: 10000"></label>
@@ -782,10 +754,43 @@ function alertesEntretienHtml() {
         <button class="btn primary full" type="submit">Ajouter l’alerte</button>
       </form>
     </div>
-    <div class="card"><div class="card-header"><div><h2>Alertes configurées</h2><p class="muted">Ces règles s’appliquent automatiquement à tous les camions.</p></div></div><div class="list">
-      ${models.length ? models.map(a => `<div class="item-card"><h4>${escapeHtml(a.type || '-')} · ${numberOrZero(a.intervalKm).toLocaleString('fr-CA')} km</h4><p>Statut : <strong>${escapeHtml(a.status || 'actif')}</strong> · Orange à ${numberOrZero(a.warningPercent || 80)}%</p><p class="muted">${escapeHtml(a.description || '')}</p><div class="actions"><button class="btn secondary" data-edit-alerte-entretien="${a.id}">Modifier</button><button class="btn danger" data-delete-alerte-entretien="${a.id}">Supprimer</button></div></div>`).join('') : `<div class="item-card"><p>Aucune alerte créée. Ajoute par exemple Vidange / 10000 km.</p></div>`}
-    </div></div>
-    <div class="card"><div class="card-header"><div><h2>Suivi compact par camion</h2><p class="muted">Vert = OK, orange = bientôt, rouge = dépassé.</p></div></div><div class="maintenance-truck-grid">${entretienGroupedByCamionHtml(items)}</div></div>
+
+    <div class="card">
+      <div class="card-header"><div><h2>Alertes configurées</h2><p class="muted">Ces règles s’appliquent automatiquement à tous les camions.</p></div></div>
+      <div class="list">
+        ${models.length ? models.map(a => `
+          <div class="item-card">
+            <h4>${escapeHtml(a.type || '-')} · ${numberOrZero(a.intervalKm).toLocaleString('fr-CA')} km</h4>
+            <p>Statut : <strong>${escapeHtml(a.status || 'actif')}</strong> · Orange à ${numberOrZero(a.warningPercent || 80)}%</p>
+            <p class="muted">${escapeHtml(a.description || '')}</p>
+            <div class="actions">
+              <button class="btn secondary" data-edit-alerte-entretien="${a.id}">Modifier</button>
+              <button class="btn danger" data-delete-alerte-entretien="${a.id}">Supprimer</button>
+            </div>
+          </div>
+        `).join('') : `<div class="item-card"><p>Aucune alerte créée. Ajoute par exemple Vidange / 10000 km.</p></div>`}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div><h2>Suivi par camion</h2><p class="muted">Vert = OK, orange = bientôt, rouge = entretien dépassé.</p></div></div>
+      <div class="maintenance-list">
+        ${items.length ? items.map(e => `
+          <div class="maintenance-alert-card ${e.progress.status}">
+            <div class="maintenance-alert-main">
+              <div><h3>${escapeHtml(camionName(e.camionId))}</h3><p>${escapeHtml(e.type || 'Entretien')}</p><p class="muted">Dernier entretien: ${e.lastEntretienDate ? formatDate(e.lastEntretienDate) : 'non renseigné'} · Départ: ${e.progress.startKm.toLocaleString('fr-CA')} km</p></div>
+              ${entretienProgressCircle(e)}
+            </div>
+            <div class="maintenance-details">
+              <span>Intervalle: ${e.progress.intervalKm.toLocaleString('fr-CA')} km</span>
+              <span>KM utilisés: ${e.progress.usedKm.toLocaleString('fr-CA')} km</span>
+              <span>Restant: ${e.progress.remainingKm.toLocaleString('fr-CA')} km</span>
+            </div>
+            ${e.progress.status === 'danger' ? '<div class="alert-text danger">Entretien dépassé: planifie une intervention.</div>' : e.progress.status === 'warning' ? '<div class="alert-text warning">Attention: entretien bientôt nécessaire.</div>' : '<div class="alert-text ok">Situation normale.</div>'}
+          </div>
+        `).join('') : `<div class="item-card"><p>Ajoute au moins un camion et une alerte à suivre pour voir les cercles.</p></div>`}
+      </div>
+    </div>
   `;
 }
 
@@ -1399,3 +1404,44 @@ init().catch(err => {
   }
   alert("Erreur dashboard: " + msg);
 });
+
+
+/* DASHBOARD REVENUS FILTRES PRO - CORRIGE */
+function revNum(v){const n=Number(v||0);return Number.isFinite(n)?n:0;}
+function revDate(v){if(!v)return null;if(typeof v.toDate==='function')return v.toDate();const d=new Date(v);return Number.isNaN(d.getTime())?null:d;}
+function revMoney(n){try{return new Intl.NumberFormat(document.documentElement.lang==='ar'?'ar-DZ':'fr-DZ',{style:'currency',currency:'DZD',maximumFractionDigits:0}).format(revNum(n));}catch(e){return Math.round(revNum(n)).toLocaleString('fr-CA')+' DA';}}
+function revTripDate(v){return revDate(v.dateDepart)||revDate(v.createdAt)||revDate(v.date)||new Date();}
+function revRange(){
+ const p=document.getElementById('dashboardPeriodFilter')?.value||'month'; const now=new Date(); let start=null; let end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59,999);
+ if(p==='today') start=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+ if(p==='week'){const diff=(now.getDay()+6)%7; start=new Date(now.getFullYear(),now.getMonth(),now.getDate()-diff);}
+ if(p==='month') start=new Date(now.getFullYear(),now.getMonth(),1);
+ if(p==='year') start=new Date(now.getFullYear(),0,1);
+ if(p==='all') start=null;
+ if(p==='custom'){const s=document.getElementById('dashboardStartDate')?.value; const e=document.getElementById('dashboardEndDate')?.value; start=s?new Date(s+'T00:00:00'):null; end=e?new Date(e+'T23:59:59'):end;}
+ return {start,end};
+}
+function revInRange(date,start,end){if(!date)return true; if(start&&date<start)return false; if(end&&date>end)return false; return true;}
+function ensureRevenueFilterUI(){
+ if(document.getElementById('dashboardRevenueFilterCard')) return;
+ const root=document.getElementById('dashboardView')||document.querySelector('#dashboardView')||document.querySelector('main')||document.body;
+ const card=document.createElement('section'); card.id='dashboardRevenueFilterCard'; card.className='dashboard-filter-card card';
+ card.innerHTML=`<div class="dashboard-filter-head"><h3>📊 Filtres revenus</h3><p class="muted">Aujourd’hui, semaine, mois, année ou personnalisé</p></div><div class="dashboard-filter-grid"><select id="dashboardPeriodFilter" onchange="loadDashboardStatsFiltered()"><option value="today">Aujourd’hui</option><option value="week">Semaine</option><option value="month" selected>Mois</option><option value="year">Année</option><option value="all">Tout</option><option value="custom">Personnalisé</option></select><input type="date" id="dashboardStartDate" onchange="document.getElementById('dashboardPeriodFilter').value='custom';loadDashboardStatsFiltered();"><input type="date" id="dashboardEndDate" onchange="document.getElementById('dashboardPeriodFilter').value='custom';loadDashboardStatsFiltered();"><button class="btn primary" type="button" onclick="loadDashboardStatsFiltered()">Appliquer</button></div>`;
+ const first=root.querySelector('.stats-grid, .card, .dashboard-card'); if(first&&first.parentNode) first.parentNode.insertBefore(card, first); else root.prepend(card);
+}
+function renderRevenueStats(stats){
+ let el=document.getElementById('dashboardFilteredStats'); if(!el){el=document.createElement('section');el.id='dashboardFilteredStats';el.className='dashboard-filter-results'; const f=document.getElementById('dashboardRevenueFilterCard'); (f?.parentNode||document.body).insertBefore(el, f?.nextSibling||null);}
+ el.innerHTML=`<div class="df-stats-grid"><div class="df-stat"><span>Revenu total</span><b>${revMoney(stats.revenue)}</b></div><div class="df-stat"><span>Bénéfice estimé</span><b>${revMoney(stats.profit)}</b></div><div class="df-stat"><span>Dépenses</span><b>${revMoney(stats.costs)}</b></div><div class="df-stat"><span>KM</span><b>${Math.round(stats.km).toLocaleString('fr-CA')}</b></div><div class="df-stat"><span>Voyages</span><b>${stats.trips}</b></div><div class="df-stat"><span>Meilleur chauffeur</span><b>${stats.bestName||'-'}</b><small>${revMoney(stats.bestProfit||0)}</small></div></div>`;
+}
+async function loadDashboardStatsFiltered(){
+ try{
+  ensureRevenueFilterUI(); if(typeof firebase==='undefined')return; const db=firebase.firestore(); const range=revRange();
+  const [voySnap,depSnap,chauffSnap]=await Promise.all([db.collection('voyages').get(),db.collection('depenses').get(),db.collection('chauffeurs').get()]);
+  const names={}; chauffSnap.forEach(doc=>{const d=doc.data(); names[d.userId||doc.id]=d.nom||d.name||d.email||'Chauffeur';});
+  let revenue=0,costs=0,profit=0,km=0,trips=0; const byDriver={};
+  voySnap.forEach(doc=>{const v=doc.data(); if(!revInRange(revTripDate(v),range.start,range.end))return; const r=revNum(v.prixCourse)+revNum(v.prixCourseRetour); const c=revNum(v.gasoil)+revNum(v.fraisMission)+revNum(v.gasoilRetour)+revNum(v.fraisMissionRetour); const dist=Math.max(0,revNum(v.kmArrivee)-revNum(v.kmDepart)); const ch=v.chauffeurId||'inconnu'; revenue+=r; costs+=c; profit+=r-c; km+=dist; trips++; if(!byDriver[ch])byDriver[ch]={profit:0}; byDriver[ch].profit+=r-c;});
+  depSnap.forEach(doc=>{const d=doc.data(); const date=revDate(d.date)||revDate(d.createdAt); if(!revInRange(date,range.start,range.end))return; const amount=revNum(d.montant||d.amount||d.cout); costs+=amount; profit-=amount; if(d.chauffeurId){if(!byDriver[d.chauffeurId])byDriver[d.chauffeurId]={profit:0}; byDriver[d.chauffeurId].profit-=amount;}});
+  const best=Object.entries(byDriver).sort((a,b)=>b[1].profit-a[1].profit)[0]; renderRevenueStats({revenue,costs,profit,km,trips,bestName:best?(names[best[0]]||best[0]):'-',bestProfit:best?best[1].profit:0});
+ }catch(e){console.error(e);alert('Erreur filtres revenus: '+e.message);}
+}
+document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{ensureRevenueFilterUI();loadDashboardStatsFiltered();},900));
