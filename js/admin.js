@@ -258,9 +258,9 @@ function inDashboardPeriod(item) {
 function dashboardFilterHtml() {
   const f = ensureFilters().dashboard;
   return adminFilterBar("dashboard", `
-    <label><span>Période revenus</span><select data-scope="dashboard" data-admin-filter="period">${periodOptions(f.period)}</select></label>
-    <label><span>Date début</span><input type="date" data-scope="dashboard" data-admin-filter="startDate" value="${escapeHtml(f.startDate || "")}"></label>
-    <label><span>Date fin</span><input type="date" data-scope="dashboard" data-admin-filter="endDate" value="${escapeHtml(f.endDate || "")}"></label>
+    <label><span>Période revenus</span><select data-scope="dashboard" data-admin-filter="period" onchange="toggleDashboardCustomDates()">${periodOptions(f.period)}</select></label>
+    <label class="dashboard-custom-date"><span>Date début</span><input type="date" data-scope="dashboard" data-admin-filter="startDate" value="${escapeHtml(f.startDate || "")}"></label>
+    <label class="dashboard-custom-date"><span>Date fin</span><input type="date" data-scope="dashboard" data-admin-filter="endDate" value="${escapeHtml(f.endDate || "")}"></label>
   `);
 }
 
@@ -1469,3 +1469,29 @@ init().catch(err => {
   }
   alert("Erreur dashboard: " + msg);
 });
+
+
+
+function toggleDashboardCustomDates() {
+  const select =
+    document.querySelector('[data-scope="dashboard"][data-admin-filter="period"]') ||
+    document.getElementById("dashboardPeriodFilter");
+
+  const value = select ? select.value : "month";
+  const show = value === "custom";
+
+  document.querySelectorAll(".dashboard-custom-date").forEach(el => {
+    el.style.display = show ? "" : "none";
+  });
+
+  document.querySelectorAll(".dashboard-custom-date-input").forEach(el => {
+    const wrap = el.closest("label") || el;
+    wrap.style.display = show ? "" : "none";
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(toggleDashboardCustomDates, 300);
+  setTimeout(toggleDashboardCustomDates, 1200);
+});
+

@@ -526,3 +526,14 @@ html[dir="rtl"] .driver-nav:hover,html[dir="rtl"] .driver-nav.active{transform:t
 .filter-panel[data-filter-panel="dashboard"] label span{display:block;font-weight:700;margin-bottom:6px}
 .filter-panel[data-filter-panel="dashboard"] select,.filter-panel[data-filter-panel="dashboard"] input{height:52px;width:100%;border-radius:14px;border:1px solid #dbe3ef;padding:0 14px;background:#fff;font-size:15px}
 @media(max-width:768px){.filter-panel[data-filter-panel="dashboard"] .filter-grid{grid-template-columns:1fr}}
+
+
+
+/* Afficher les dates seulement en mode personnalisé */
+.dashboard-custom-date {
+  display: none;
+}
+
+.dashboard-custom-date-input {
+  display: none;
+}

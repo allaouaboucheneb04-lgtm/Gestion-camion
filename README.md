@@ -182,3 +182,9 @@ Après upload sur GitHub, recharge avec:
 
 ## Filtre dashboard corrigé proprement
 Le filtre est intégré directement dans dashboardHtml(): revenu, bénéfice, dépenses, KM, voyages et meilleur chauffeur changent vraiment. Recharge: ?v=filter-real-fixed2
+
+
+## Correction filtre personnalisé
+- Date début / date fin cachées par défaut.
+- Les dates s'affichent seulement quand Période revenus = Personnalisé.
+- Recharge: ?v=custom-dates1
