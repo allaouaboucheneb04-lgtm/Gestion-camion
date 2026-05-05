@@ -226,15 +226,76 @@ function dashboardEntretienHtml() {
   `;
 }
 
+
+function dashboardDateRange() {
+  const f = ensureFilters().dashboard;
+  const now = new Date();
+  let start = null;
+  let end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+
+  if (f.period === "today") start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  else if (f.period === "week") {
+    const diff = (now.getDay() + 6) % 7;
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff).getTime();
+  } else if (f.period === "month") start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  else if (f.period === "year") start = new Date(now.getFullYear(), 0, 1).getTime();
+  else if (f.period === "custom") {
+    start = f.startDate ? new Date(f.startDate + "T00:00:00").getTime() : 0;
+    end = f.endDate ? new Date(f.endDate + "T23:59:59").getTime() : end;
+  } else if (f.period === "all") start = null;
+
+  return { start, end };
+}
+
+function inDashboardPeriod(item) {
+  const { start, end } = dashboardDateRange();
+  if (start === null) return true;
+  const d = docDateValue(item);
+  if (!d) return true;
+  return d >= start && d <= end;
+}
+
+function dashboardFilterHtml() {
+  const f = ensureFilters().dashboard;
+  return adminFilterBar("dashboard", `
+    <label><span>Période revenus</span><select data-scope="dashboard" data-admin-filter="period">${periodOptions(f.period)}</select></label>
+    <label><span>Date début</span><input type="date" data-scope="dashboard" data-admin-filter="startDate" value="${escapeHtml(f.startDate || "")}"></label>
+    <label><span>Date fin</span><input type="date" data-scope="dashboard" data-admin-filter="endDate" value="${escapeHtml(f.endDate || "")}"></label>
+  `);
+}
+
 function dashboardHtml() {
-  const revenu = state.voyages.reduce((s, v) => s + voyageRevenue(v), 0);
-  const coutsVoyages = state.voyages.reduce((s, v) => s + voyageCosts(v), 0);
-  const coutsEntretien = state.entretien.reduce((s, e) => s + numberOrZero(e.cout), 0);
-  const autresDepenses = state.depenses.reduce((s, d) => s + numberOrZero(d.montant), 0);
+  ensureFilters();
+  const voyages = state.voyages.filter(inDashboardPeriod);
+  const entretienRows = state.entretien.filter(inDashboardPeriod);
+  const depensesRows = state.depenses.filter(inDashboardPeriod);
+  const odometresRows = state.odometres.filter(inDashboardPeriod);
+
+  const revenu = voyages.reduce((s, v) => s + voyageRevenue(v), 0);
+  const coutsVoyages = voyages.reduce((s, v) => s + voyageCosts(v), 0);
+  const coutsEntretien = entretienRows.reduce((s, e) => s + numberOrZero(e.cout), 0);
+  const autresDepenses = depensesRows.reduce((s, d) => s + numberOrZero(d.montant), 0);
   const benefice = revenu - coutsVoyages - coutsEntretien - autresDepenses;
-  const kmJour = state.odometres.length;
+  const kmJour = odometresRows.length;
+
+  const byDriver = {};
+  voyages.forEach(v => {
+    const id = v.chauffeurId || "inconnu";
+    if (!byDriver[id]) byDriver[id] = { profit: 0, revenue: 0, count: 0 };
+    byDriver[id].profit += voyageProfit(v);
+    byDriver[id].revenue += voyageRevenue(v);
+    byDriver[id].count += 1;
+  });
+  depensesRows.forEach(d => {
+    if (!d.chauffeurId) return;
+    if (!byDriver[d.chauffeurId]) byDriver[d.chauffeurId] = { profit: 0, revenue: 0, count: 0 };
+    byDriver[d.chauffeurId].profit -= numberOrZero(d.montant);
+  });
+  const best = Object.entries(byDriver).sort((a,b) => b[1].profit - a[1].profit)[0];
 
   return `
+    ${dashboardFilterHtml()}
+
     <div class="stats-grid">
       <div class="card stat-card"><div class="label">Camions</div><div class="value">${state.camions.length}</div></div>
       <div class="card stat-card"><div class="label">Chauffeurs actifs</div><div class="value">${state.chauffeurs.filter(c => (c.status || "actif") === "actif").length}</div></div>
@@ -244,17 +305,20 @@ function dashboardHtml() {
     </div>
 
     <div class="card">
-      <div class="card-header"><div><h2>Résumé rapide</h2><p class="muted">Vue globale de l'activité camion</p></div></div>
+      <div class="card-header"><div><h2>Résumé rapide</h2><p class="muted">Vue globale filtrée de l'activité camion</p></div></div>
       <div class="grid">
         <div class="item-card"><h4>Coûts voyages</h4><p>${money(coutsVoyages)}</p></div>
         <div class="item-card"><h4>Entretien</h4><p>${money(coutsEntretien)}</p></div>
         <div class="item-card"><h4>Autres dépenses</h4><p>${money(autresDepenses)}</p></div>
+        <div class="item-card"><h4>Voyages filtrés</h4><p>${voyages.length}</p></div>
+        <div class="item-card"><h4>Meilleur chauffeur</h4><p>${best ? escapeHtml(chauffeurName(best[0])) : "-"}</p><p class="muted">${best ? money(best[1].profit) : ""}</p></div>
       </div>
     </div>
 
     ${dashboardEntretienHtml()}
   `;
 }
+
 
 function camionFormHtml() {
   return `
@@ -485,7 +549,8 @@ function ensureFilters() {
     depenses: { q: "", chauffeurId: "", camionId: "", type: "", period: "month" },
     entretien: { q: "", camionId: "", type: "", status: "", period: "all" },
     statskm: { chauffeurId: "", camionId: "", period: "month" },
-    profit: { chauffeurId: "", camionId: "", period: "month" }
+    profit: { chauffeurId: "", camionId: "", period: "month" },
+    dashboard: { period: "month", startDate: "", endDate: "" }
   };
   for (const [k, v] of Object.entries(defaults)) state.filters[k] = { ...v, ...(state.filters[k] || {}) };
   return state.filters;
@@ -527,7 +592,7 @@ function optionChauffeurs(selected = "") {
 }
 
 function periodOptions(selected = "month") {
-  return `<option value="today" ${selected === "today" ? "selected" : ""}>Aujourd’hui</option><option value="week" ${selected === "week" ? "selected" : ""}>Cette semaine</option><option value="month" ${selected === "month" ? "selected" : ""}>Ce mois</option><option value="year" ${selected === "year" ? "selected" : ""}>Cette année</option><option value="all" ${selected === "all" ? "selected" : ""}>Tout</option>`;
+  return `<option value="today" ${selected === "today" ? "selected" : ""}>Aujourd’hui</option><option value="week" ${selected === "week" ? "selected" : ""}>Cette semaine</option><option value="month" ${selected === "month" ? "selected" : ""}>Ce mois</option><option value="year" ${selected === "year" ? "selected" : ""}>Cette année</option><option value="all" ${selected === "all" ? "selected" : ""}>Tout</option><option value="custom" ${selected === "custom" ? "selected" : ""}>Personnalisé</option>`;
 }
 
 function adminFilterBar(scope, fieldsHtml) {
@@ -1404,44 +1469,3 @@ init().catch(err => {
   }
   alert("Erreur dashboard: " + msg);
 });
-
-
-/* DASHBOARD REVENUS FILTRES PRO - CORRIGE */
-function revNum(v){const n=Number(v||0);return Number.isFinite(n)?n:0;}
-function revDate(v){if(!v)return null;if(typeof v.toDate==='function')return v.toDate();const d=new Date(v);return Number.isNaN(d.getTime())?null:d;}
-function revMoney(n){try{return new Intl.NumberFormat(document.documentElement.lang==='ar'?'ar-DZ':'fr-DZ',{style:'currency',currency:'DZD',maximumFractionDigits:0}).format(revNum(n));}catch(e){return Math.round(revNum(n)).toLocaleString('fr-CA')+' DA';}}
-function revTripDate(v){return revDate(v.dateDepart)||revDate(v.createdAt)||revDate(v.date)||new Date();}
-function revRange(){
- const p=document.getElementById('dashboardPeriodFilter')?.value||'month'; const now=new Date(); let start=null; let end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59,999);
- if(p==='today') start=new Date(now.getFullYear(),now.getMonth(),now.getDate());
- if(p==='week'){const diff=(now.getDay()+6)%7; start=new Date(now.getFullYear(),now.getMonth(),now.getDate()-diff);}
- if(p==='month') start=new Date(now.getFullYear(),now.getMonth(),1);
- if(p==='year') start=new Date(now.getFullYear(),0,1);
- if(p==='all') start=null;
- if(p==='custom'){const s=document.getElementById('dashboardStartDate')?.value; const e=document.getElementById('dashboardEndDate')?.value; start=s?new Date(s+'T00:00:00'):null; end=e?new Date(e+'T23:59:59'):end;}
- return {start,end};
-}
-function revInRange(date,start,end){if(!date)return true; if(start&&date<start)return false; if(end&&date>end)return false; return true;}
-function ensureRevenueFilterUI(){
- if(document.getElementById('dashboardRevenueFilterCard')) return;
- const root=document.getElementById('dashboardView')||document.querySelector('#dashboardView')||document.querySelector('main')||document.body;
- const card=document.createElement('section'); card.id='dashboardRevenueFilterCard'; card.className='dashboard-filter-card card';
- card.innerHTML=`<div class="dashboard-filter-head"><h3>📊 Filtres revenus</h3><p class="muted">Aujourd’hui, semaine, mois, année ou personnalisé</p></div><div class="dashboard-filter-grid"><select id="dashboardPeriodFilter" onchange="loadDashboardStatsFiltered()"><option value="today">Aujourd’hui</option><option value="week">Semaine</option><option value="month" selected>Mois</option><option value="year">Année</option><option value="all">Tout</option><option value="custom">Personnalisé</option></select><input type="date" id="dashboardStartDate" onchange="document.getElementById('dashboardPeriodFilter').value='custom';loadDashboardStatsFiltered();"><input type="date" id="dashboardEndDate" onchange="document.getElementById('dashboardPeriodFilter').value='custom';loadDashboardStatsFiltered();"><button class="btn primary" type="button" onclick="loadDashboardStatsFiltered()">Appliquer</button></div>`;
- const first=root.querySelector('.stats-grid, .card, .dashboard-card'); if(first&&first.parentNode) first.parentNode.insertBefore(card, first); else root.prepend(card);
-}
-function renderRevenueStats(stats){
- let el=document.getElementById('dashboardFilteredStats'); if(!el){el=document.createElement('section');el.id='dashboardFilteredStats';el.className='dashboard-filter-results'; const f=document.getElementById('dashboardRevenueFilterCard'); (f?.parentNode||document.body).insertBefore(el, f?.nextSibling||null);}
- el.innerHTML=`<div class="df-stats-grid"><div class="df-stat"><span>Revenu total</span><b>${revMoney(stats.revenue)}</b></div><div class="df-stat"><span>Bénéfice estimé</span><b>${revMoney(stats.profit)}</b></div><div class="df-stat"><span>Dépenses</span><b>${revMoney(stats.costs)}</b></div><div class="df-stat"><span>KM</span><b>${Math.round(stats.km).toLocaleString('fr-CA')}</b></div><div class="df-stat"><span>Voyages</span><b>${stats.trips}</b></div><div class="df-stat"><span>Meilleur chauffeur</span><b>${stats.bestName||'-'}</b><small>${revMoney(stats.bestProfit||0)}</small></div></div>`;
-}
-async function loadDashboardStatsFiltered(){
- try{
-  ensureRevenueFilterUI(); if(typeof firebase==='undefined')return; const db=firebase.firestore(); const range=revRange();
-  const [voySnap,depSnap,chauffSnap]=await Promise.all([db.collection('voyages').get(),db.collection('depenses').get(),db.collection('chauffeurs').get()]);
-  const names={}; chauffSnap.forEach(doc=>{const d=doc.data(); names[d.userId||doc.id]=d.nom||d.name||d.email||'Chauffeur';});
-  let revenue=0,costs=0,profit=0,km=0,trips=0; const byDriver={};
-  voySnap.forEach(doc=>{const v=doc.data(); if(!revInRange(revTripDate(v),range.start,range.end))return; const r=revNum(v.prixCourse)+revNum(v.prixCourseRetour); const c=revNum(v.gasoil)+revNum(v.fraisMission)+revNum(v.gasoilRetour)+revNum(v.fraisMissionRetour); const dist=Math.max(0,revNum(v.kmArrivee)-revNum(v.kmDepart)); const ch=v.chauffeurId||'inconnu'; revenue+=r; costs+=c; profit+=r-c; km+=dist; trips++; if(!byDriver[ch])byDriver[ch]={profit:0}; byDriver[ch].profit+=r-c;});
-  depSnap.forEach(doc=>{const d=doc.data(); const date=revDate(d.date)||revDate(d.createdAt); if(!revInRange(date,range.start,range.end))return; const amount=revNum(d.montant||d.amount||d.cout); costs+=amount; profit-=amount; if(d.chauffeurId){if(!byDriver[d.chauffeurId])byDriver[d.chauffeurId]={profit:0}; byDriver[d.chauffeurId].profit-=amount;}});
-  const best=Object.entries(byDriver).sort((a,b)=>b[1].profit-a[1].profit)[0]; renderRevenueStats({revenue,costs,profit,km,trips,bestName:best?(names[best[0]]||best[0]):'-',bestProfit:best?best[1].profit:0});
- }catch(e){console.error(e);alert('Erreur filtres revenus: '+e.message);}
-}
-document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{ensureRevenueFilterUI();loadDashboardStatsFiltered();},900));

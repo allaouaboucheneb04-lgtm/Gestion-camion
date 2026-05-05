@@ -180,5 +180,5 @@ Après upload sur GitHub, recharge avec:
 - Recharge avec `?v=fix-alertes1`.
 
 
-## Fix téléchargement et filtres revenus
-ZIP vérifié avec unzip -t. Recharge: ?v=revenus-corrige2
+## Filtre dashboard corrigé proprement
+Le filtre est intégré directement dans dashboardHtml(): revenu, bénéfice, dépenses, KM, voyages et meilleur chauffeur changent vraiment. Recharge: ?v=filter-real-fixed2
